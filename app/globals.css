@@ -1,0 +1,90 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+  20%, 40%, 60%, 80% { transform: translateX(4px); }
+}
+
+@layer base {
+  :root {
+    /* Base Backgrounds - Dark Navy System */
+    --bg-base: 210 30% 8%;
+    --bg-section: 210 28% 12%;
+    --bg-card: 210 25% 18%;
+    --bg-input: 210 20% 15%;
+
+    /* Accent - Gold */
+    --accent-gold: 43 96% 56%;
+    --accent-gold-muted: 43 70% 50%;
+
+    /* Text */
+    --text-primary: 210 20% 98%;
+    --text-secondary: 210 15% 65%;
+    --text-tertiary: 210 10% 45%;
+
+    /* Borders & Shadows */
+    --border-subtle: 210 15% 25%;
+    --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.3);
+    --shadow-lift: 0 4px 12px rgba(0, 0, 0, 0.4);
+
+    /* Legacy ShadCN variables (maintained for compatibility) */
+    --background: var(--bg-base);
+    --foreground: var(--text-primary);
+    --card: var(--bg-card);
+    --card-foreground: var(--text-primary);
+    --popover: var(--bg-card);
+    --popover-foreground: var(--text-primary);
+    --primary: var(--accent-gold);
+    --primary-foreground: 210 30% 8%;
+    --secondary: var(--bg-section);
+    --secondary-foreground: var(--text-primary);
+    --muted: var(--bg-section);
+    --muted-foreground: var(--text-secondary);
+    --accent: var(--bg-section);
+    --accent-foreground: var(--text-primary);
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 20% 98%;
+    --border: var(--border-subtle);
+    --input: var(--bg-input);
+    --ring: var(--accent-gold);
+    --radius: 0.5rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-[hsl(var(--bg-base))] text-[hsl(var(--text-primary))];
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .scrollbar-hidden {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    min-height: 44px;
+  }
+  button {
+    touch-action: manipulation;
+  }
+}

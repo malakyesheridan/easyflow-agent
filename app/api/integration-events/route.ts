@@ -1,0 +1,40 @@
+import { withRoute } from '@/lib/api/withRoute';
+import { err } from '@/lib/result';
+import { listIntegrationEvents } from '@/lib/queries/integration_events';
+import { requireOrgContext } from '@/lib/auth/require';
+import { canManageOrgSettings } from '@/lib/authz';
+
+/**
+ * GET /api/integration-events
+ * Query:
+ * - orgId (required)
+ * - provider (optional)
+ * - integrationId (optional)
+ * - eventType (optional)
+ * - actionType (optional)
+ * - status (optional)
+ * - jobId (optional)
+ * - limit (optional)
+ */
+export const GET = withRoute(async (req: Request) => {
+  const { searchParams } = new URL(req.url);
+  const orgId = searchParams.get('orgId');
+  const context = await requireOrgContext(req, orgId);
+  if (!context.ok) return context;
+
+  if (!canManageOrgSettings(context.data.actor)) {
+    return err('FORBIDDEN', 'Insufficient permissions');
+  }
+
+  const limit = searchParams.get('limit');
+  return await listIntegrationEvents({
+    orgId: context.data.orgId,
+    provider: searchParams.get('provider') || undefined,
+    integrationId: searchParams.get('integrationId') || undefined,
+    eventType: searchParams.get('eventType') || undefined,
+    actionType: searchParams.get('actionType') || undefined,
+    status: searchParams.get('status') || undefined,
+    jobId: searchParams.get('jobId') || undefined,
+    limit: limit ? Number(limit) : undefined,
+  });
+});
