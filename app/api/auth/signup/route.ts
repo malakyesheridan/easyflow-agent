@@ -75,6 +75,7 @@ function fail(code: string, message: string): never {
 }
 
 export async function POST(req: Request): Promise<Response> {
+  const isDev = process.env.NODE_ENV !== 'production';
   try {
     const body = await req.json();
     const parsed = signupSchema.safeParse(body);
@@ -271,6 +272,13 @@ export async function POST(req: Request): Promise<Response> {
     response.headers.set('Set-Cookie', buildSessionCookie(token));
     return response;
   } catch (error) {
-    return jsonResult(err('INTERNAL_ERROR', 'Failed to sign up', error));
+    console.error('Signup failed:', error);
+    return jsonResult(
+      err(
+        'INTERNAL_ERROR',
+        'Failed to sign up',
+        isDev ? (error instanceof Error ? error.message : error) : undefined
+      )
+    );
   }
 }

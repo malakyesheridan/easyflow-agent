@@ -2,7 +2,17 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { SESSION_COOKIE_NAME } from '@/lib/auth/sessionConstants';
 
-const AUTH_FREE_PATHS = ['/login', '/signup', '/forgot-password', '/reset-password', '/onboarding', '/invite'];
+const AUTH_FREE_PATHS = [
+  '/login',
+  '/signup',
+  '/signin',
+  '/logout',
+  '/forgot-password',
+  '/reset-password',
+  '/onboarding',
+  '/invite',
+  '/auth',
+];
 const DISABLED_TRADE_PATHS = ['/jobs', '/crews', '/crew', '/warehouse', '/invoices', '/operations', '/clients'];
 
 export function middleware(req: NextRequest) {
