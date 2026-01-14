@@ -29,7 +29,7 @@ export default function SidebarNav() {
   const adminNavItems: NavItem[] = [
     { href: '/dashboard', label: 'Dashboard' },
     { href: '/prospecting', label: 'Prospecting' },
-    { href: '/leads', label: 'Database' },
+    { href: '/contacts', label: 'Contacts' },
     { href: '/appraisals', label: 'Appraisals' },
     { href: '/listings', label: 'Listings' },
     { href: '/reports', label: 'Reports' },
@@ -53,7 +53,7 @@ export default function SidebarNav() {
     { href: '/daily-plan', label: 'Follow-ups' },
     { href: '/schedule', label: 'Calendar' },
     { href: '/prospecting', label: 'Prospecting' },
-    { href: '/leads', label: 'Database' },
+    { href: '/contacts', label: 'Contacts' },
     { href: '/listings', label: 'Listings' },
     { href: '/profile', label: 'Profile' },
   ];

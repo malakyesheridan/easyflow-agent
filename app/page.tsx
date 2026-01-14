@@ -14,8 +14,8 @@ export default function Home() {
             <p className="text-sm font-semibold text-text-primary">Prospecting</p>
             <p className="mt-1 text-sm text-text-secondary">Build a pipeline of future sellers.</p>
           </a>
-          <a href="/leads" className="rounded-lg bg-bg-card p-6 shadow-soft hover:shadow-lift transition-shadow">
-            <p className="text-sm font-semibold text-text-primary">Database</p>
+          <a href="/contacts" className="rounded-lg bg-bg-card p-6 shadow-soft hover:shadow-lift transition-shadow">
+            <p className="text-sm font-semibold text-text-primary">Contacts</p>
             <p className="mt-1 text-sm text-text-secondary">Nurture past sellers and long-term contacts.</p>
           </a>
           <a href="/appraisals" className="rounded-lg bg-bg-card p-6 shadow-soft hover:shadow-lift transition-shadow">

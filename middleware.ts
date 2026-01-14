@@ -38,9 +38,15 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  if (pathname.startsWith('/database')) {
+    const url = req.nextUrl.clone();
+    url.pathname = pathname.replace(/^\/database/, '/contacts');
+    return NextResponse.redirect(url);
+  }
+
   if (DISABLED_TRADE_PATHS.some((path) => pathname.startsWith(path))) {
     const url = req.nextUrl.clone();
-    url.pathname = '/leads';
+    url.pathname = '/contacts';
     return NextResponse.redirect(url);
   }
 

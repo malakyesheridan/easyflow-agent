@@ -1,24 +1,5 @@
-import { Card, PageContainer, PageHeader } from '@/components/ui';
+import { redirect } from 'next/navigation';
 
 export default function LeadsPage() {
-  return (
-    <PageContainer>
-      <PageHeader
-        title="Database"
-        subtitle="Nurture your seller database and track every touchpoint."
-      />
-      <Card className="border border-dashed border-border-subtle bg-bg-section/40">
-        <div className="text-center space-y-3">
-          <p className="text-sm font-semibold text-text-primary">No contacts yet</p>
-          <p className="text-sm text-text-secondary max-w-xl mx-auto">
-            This database will track past sellers, appraisal prospects, and long-term nurture
-            contacts so you can stay top of mind.
-          </p>
-          <p className="text-xs text-text-tertiary">
-            Coming next: tagging, nurture sequences, and engagement history.
-          </p>
-        </div>
-      </Card>
-    </PageContainer>
-  );
+  redirect('/contacts');
 }

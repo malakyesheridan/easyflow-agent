@@ -4,9 +4,12 @@ import type { AppError } from '@/lib/result';
 
 /**
  * Route handler function type.
- * Accepts a Request and returns a Promise<Result<T>>.
+ * Accepts a Request and optional context and returns a Promise<Result<T>>.
  */
-type RouteHandler<T = unknown> = (req: Request) => Promise<Result<T>>;
+type RouteHandler<T = unknown, TContext = unknown> = (
+  req: Request,
+  context?: TContext
+) => Promise<Result<T>>;
 
 /**
  * Wraps a route handler to provide consistent error handling.
@@ -31,12 +34,12 @@ type RouteHandler<T = unknown> = (req: Request) => Promise<Result<T>>;
  * });
  * ```
  */
-export function withRoute<T = unknown>(
-  handler: RouteHandler<T>
-): (req: Request) => Promise<Response> {
-  return async (req: Request): Promise<Response> => {
+export function withRoute<T = unknown, TContext = unknown>(
+  handler: RouteHandler<T, TContext>
+): (req: Request, context?: TContext) => Promise<Response> {
+  return async (req: Request, context?: TContext): Promise<Response> => {
     try {
-      const result = await handler(req);
+      const result = await handler(req, context);
       return jsonResult(result);
     } catch (error) {
       // Unexpected error - log it and convert to AppError
