@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, boolean, timestamp, index, numeric } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, integer, boolean, timestamp, index, numeric, jsonb } from 'drizzle-orm/pg-core';
 
 /**
  * Org-scoped settings.
@@ -13,6 +13,12 @@ export const orgSettings = pgTable(
     companyLogoPath: text('company_logo_path'),
     timezone: text('timezone'),
     businessType: text('business_type'),
+    officeType: text('office_type'),
+    reportCadence: text('report_cadence'),
+    serviceAreaSuburbs: jsonb('service_area_suburbs').notNull().default([]),
+    buyerIntakePublicEnabled: boolean('buyer_intake_public_enabled').notNull().default(false),
+    buyerIntakeManualEnabled: boolean('buyer_intake_manual_enabled').notNull().default(true),
+    listingStatusOptions: jsonb('listing_status_options').notNull().default([]),
 
     defaultWorkdayStartMinutes: integer('default_workday_start_minutes'),
     defaultWorkdayEndMinutes: integer('default_workday_end_minutes'),

@@ -25,6 +25,12 @@ export async function upsertOrgSettings(input: OrgSettingsUpdateInput): Promise<
       companyLogoPath: validated.companyLogoPath === undefined ? undefined : validated.companyLogoPath,
       timezone: validated.timezone === undefined ? undefined : validated.timezone,
       businessType: validated.businessType === undefined ? undefined : validated.businessType,
+      officeType: validated.officeType === undefined ? undefined : validated.officeType,
+      reportCadence: validated.reportCadence === undefined ? undefined : validated.reportCadence,
+      serviceAreaSuburbs: validated.serviceAreaSuburbs === undefined ? undefined : validated.serviceAreaSuburbs,
+      buyerIntakePublicEnabled: validated.buyerIntakePublicEnabled ?? undefined,
+      buyerIntakeManualEnabled: validated.buyerIntakeManualEnabled ?? undefined,
+      listingStatusOptions: validated.listingStatusOptions === undefined ? undefined : validated.listingStatusOptions,
       defaultWorkdayStartMinutes:
         validated.defaultWorkdayStartMinutes === undefined ? undefined : validated.defaultWorkdayStartMinutes,
       defaultWorkdayEndMinutes: validated.defaultWorkdayEndMinutes === undefined ? undefined : validated.defaultWorkdayEndMinutes,

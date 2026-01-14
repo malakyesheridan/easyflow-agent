@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -9,9 +8,47 @@ import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Textarea from '@/components/ui/Textarea';
 import Chip from '@/components/ui/Chip';
+import Select from '@/components/ui/Select';
 import { useOrgConfig } from '@/hooks/useOrgConfig';
 
 type ApiResponse<T> = { ok: true; data: T } | { ok: false; error: any };
+
+type ListItemDraft = {
+  id?: string;
+  label: string;
+  clientId: string;
+};
+
+type ZoneDraft = {
+  id?: string;
+  name: string;
+  suburbs: string[];
+  clientId: string;
+  suburbInput: string;
+};
+
+const STEPS = [
+  { id: 1, title: 'Agency setup', subtitle: 'Brand and identity' },
+  { id: 2, title: 'Team profile', subtitle: 'Territory and cadence' },
+  { id: 3, title: 'Buyer intake', subtitle: 'Lead sources and pipeline' },
+  { id: 4, title: 'Listing pipeline', subtitle: 'Stages and status set' },
+  { id: 5, title: 'Matching setup', subtitle: 'Config and zones' },
+  { id: 6, title: 'Vendor reports', subtitle: 'Defaults and finish' },
+];
+
+const DEFAULT_LEAD_SOURCES = ['REA', 'Domain', 'Signboard', 'Referral', 'Instagram', 'Website'];
+const DEFAULT_BUYER_PIPELINE = [
+  'New enquiry',
+  'Qualified',
+  'Engaged',
+  'Inspection booked',
+  'Offer made',
+  'Won',
+  'Lost',
+];
+const DEFAULT_LISTING_PIPELINE = ['Appraisal', 'Listed', 'Active campaign', 'Under offer', 'Sold', 'Withdrawn'];
+const DEFAULT_LISTING_STATUSES = ['Coming soon', 'Active', 'Under offer', 'Sold'];
+const DEFAULT_COMMENTARY_TEMPLATE = 'Summarize buyer demand, inspection activity, and market movement for the past period.';
 
 function getApiErrorMessage(payload: ApiResponse<any>): string | undefined {
   if (payload.ok) return undefined;
@@ -19,67 +56,11 @@ function getApiErrorMessage(payload: ApiResponse<any>): string | undefined {
   return payload.error?.message;
 }
 
-type JobTypeDraft = {
-  id?: string;
-  label: string;
-  defaultDurationMinutes: string;
-  requirePhotos: boolean;
-  requireMaterials: boolean;
-  requireReports: boolean;
-  templateId?: string;
-  steps: Array<{
-    id: string;
-    title: string;
-    description: string;
-    isRequired: boolean;
-  }>;
-};
-
-type CrewDraft = {
-  id?: string;
-  firstName: string;
-  lastName: string;
-  role: string;
-  email: string;
-  phone: string;
-  skills: string;
-  dailyCapacityMinutes: string;
-};
-
-type MaterialDraft = {
-  id?: string;
-  name: string;
-  unit: string;
-  startingStock: string;
-  lowStockThreshold: string;
-};
-
-const STEPS = [
-  { id: 1, title: 'Organisation setup', subtitle: 'Brand and identity' },
-  { id: 2, title: 'Work structure', subtitle: 'Defaults and hours' },
-  { id: 3, title: 'Job types & templates', subtitle: 'Configure how work runs' },
-  { id: 4, title: 'Crew setup', subtitle: 'Add your team' },
-  { id: 5, title: 'Materials', subtitle: 'Optional inventory setup' },
-  { id: 6, title: 'Review & finish', subtitle: 'Confirm details' },
-];
-
-function minutesToTimeString(minutes: number | null | undefined): string {
-  if (minutes === null || minutes === undefined) return '';
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-}
-
-function timeStringToMinutes(value: string): number | null {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  const match = /^(\d{1,2}):(\d{2})$/.exec(trimmed);
-  if (!match) return null;
-  const h = Number(match[1]);
-  const m = Number(match[2]);
-  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
-  if (h < 0 || h > 23 || m < 0 || m > 59) return null;
-  return h * 60 + m;
+async function parseApiResponse<T>(res: Response, fallbackMessage: string): Promise<T> {
+  const json = (await res.json()) as ApiResponse<T>;
+  const message = getApiErrorMessage(json);
+  if (!res.ok || !json.ok) throw new Error(message || fallbackMessage);
+  return json.data;
 }
 
 function makeId(prefix: string) {
@@ -93,6 +74,55 @@ function makeId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function buildDraftList(values: string[], prefix: string): ListItemDraft[] {
+  return values.map((label) => ({
+    clientId: makeId(prefix),
+    label,
+  }));
+}
+
+function normalizeStringList(values: string[]): string[] {
+  const seen = new Set<string>();
+  return values
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .filter((value) => {
+      const key = value.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function normalizeListItems(items: ListItemDraft[], label: string) {
+  const trimmed = items
+    .map((item) => ({ id: item.id, name: item.label.trim() }))
+    .filter((item) => item.name.length > 0);
+
+  if (trimmed.length === 0) {
+    return { error: `Add at least one ${label}.` };
+  }
+
+  const seen = new Set<string>();
+  for (const item of trimmed) {
+    const key = item.name.toLowerCase();
+    if (seen.has(key)) {
+      return { error: `${label} must be unique.` };
+    }
+    seen.add(key);
+  }
+
+  return { items: trimmed };
+}
+
+function detectTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
+
 export default function OnboardingWizard() {
   const router = useRouter();
   const { config, loading, refresh, error: configError } = useOrgConfig();
@@ -104,26 +134,44 @@ export default function OnboardingWizard() {
   const [logoUploading, setLogoUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [logoError, setLogoError] = useState<string | null>(null);
+  const [logoSuccess, setLogoSuccess] = useState<string | null>(null);
 
   const [orgName, setOrgName] = useState('');
   const [logoPath, setLogoPath] = useState<string | null>(null);
   const [primaryColor, setPrimaryColor] = useState('#111827');
   const [secondaryColor, setSecondaryColor] = useState('');
 
-  const [businessType, setBusinessType] = useState('');
-  const [workdayStart, setWorkdayStart] = useState('06:00');
-  const [workdayEnd, setWorkdayEnd] = useState('18:00');
-  const [defaultJobDuration, setDefaultJobDuration] = useState('120');
-  const [defaultTravelBuffer, setDefaultTravelBuffer] = useState('30');
-  const [hqAddressLine1, setHqAddressLine1] = useState('');
-  const [hqAddressLine2, setHqAddressLine2] = useState('');
-  const [hqSuburb, setHqSuburb] = useState('');
-  const [hqState, setHqState] = useState('');
-  const [hqPostcode, setHqPostcode] = useState('');
+  const [officeType, setOfficeType] = useState('');
+  const [timezone, setTimezone] = useState('');
+  const [serviceAreaSuburbs, setServiceAreaSuburbs] = useState<string[]>([]);
+  const [serviceAreaInput, setServiceAreaInput] = useState('');
+  const [reportCadence, setReportCadence] = useState<'weekly' | 'fortnightly'>('weekly');
 
-  const [jobTypes, setJobTypes] = useState<JobTypeDraft[]>([]);
-  const [crews, setCrews] = useState<CrewDraft[]>([]);
-  const [materials, setMaterials] = useState<MaterialDraft[]>([]);
+  const [buyerIntakePublicEnabled, setBuyerIntakePublicEnabled] = useState(false);
+  const [buyerIntakeManualEnabled, setBuyerIntakeManualEnabled] = useState(true);
+  const [leadSources, setLeadSources] = useState<ListItemDraft[]>([]);
+  const [buyerPipelineStages, setBuyerPipelineStages] = useState<ListItemDraft[]>([]);
+
+  const [listingPipelineStages, setListingPipelineStages] = useState<ListItemDraft[]>([]);
+  const [listingStatusOptions, setListingStatusOptions] = useState<ListItemDraft[]>([]);
+
+  const [matchingMode, setMatchingMode] = useState<'suburb' | 'zone'>('zone');
+  const [budgetWeight, setBudgetWeight] = useState(25);
+  const [locationWeight, setLocationWeight] = useState(25);
+  const [propertyTypeWeight, setPropertyTypeWeight] = useState(20);
+  const [bedsBathsWeight, setBedsBathsWeight] = useState(15);
+  const [timeframeWeight, setTimeframeWeight] = useState(15);
+  const [hotMatchThreshold, setHotMatchThreshold] = useState('85');
+  const [goodMatchThreshold, setGoodMatchThreshold] = useState('70');
+  const [zones, setZones] = useState<ZoneDraft[]>([]);
+
+  const [includeDemandSummary, setIncludeDemandSummary] = useState(true);
+  const [includeActivitySummary, setIncludeActivitySummary] = useState(true);
+  const [includeMarketOverview, setIncludeMarketOverview] = useState(true);
+  const [commentaryTemplate, setCommentaryTemplate] = useState(DEFAULT_COMMENTARY_TEMPLATE);
+  const [createDemoData, setCreateDemoData] = useState(false);
+
   const logoInputRef = useRef<HTMLInputElement | null>(null);
 
   const progressPercent = useMemo(() => {
@@ -155,35 +203,54 @@ export default function OnboardingWizard() {
     setLoadingState(true);
     setError(null);
     try {
-      const [orgRes, settingsRes, jobTypesRes, templatesRes, crewsRes, materialsRes] = await Promise.all([
-        fetch(`/api/orgs?orgId=${orgId}`),
-        fetch(`/api/settings?orgId=${orgId}`),
-        fetch(`/api/job-types?orgId=${orgId}&includeArchived=false`),
-        fetch(`/api/work-templates?orgId=${orgId}&includeSteps=true&includeArchived=false`),
-        fetch(`/api/crews?orgId=${orgId}&activeOnly=false`),
-        fetch(`/api/materials?orgId=${orgId}`),
-      ]);
+      const [orgRes, settingsRes, leadSourcesRes, buyerStagesRes, listingStagesRes, matchingRes, zonesRes, reportRes] =
+        await Promise.all([
+          fetch(`/api/orgs?orgId=${orgId}`),
+          fetch(`/api/settings?orgId=${orgId}`),
+          fetch(`/api/lead-sources?orgId=${orgId}`),
+          fetch(`/api/buyer-pipeline?orgId=${orgId}`),
+          fetch(`/api/listing-pipeline?orgId=${orgId}`),
+          fetch(`/api/matching-config?orgId=${orgId}`),
+          fetch(`/api/suburb-zones?orgId=${orgId}`),
+          fetch(`/api/report-templates?orgId=${orgId}&type=vendor`),
+        ]);
 
       const orgJson = (await orgRes.json()) as ApiResponse<any>;
       const settingsJson = (await settingsRes.json()) as ApiResponse<any>;
+      const leadSourcesJson = (await leadSourcesRes.json()) as ApiResponse<any[]>;
+      const buyerStagesJson = (await buyerStagesRes.json()) as ApiResponse<any[]>;
+      const listingStagesJson = (await listingStagesRes.json()) as ApiResponse<any[]>;
+      const matchingJson = (await matchingRes.json()) as ApiResponse<any>;
+      const zonesJson = (await zonesRes.json()) as ApiResponse<any[]>;
+      const reportJson = (await reportRes.json()) as ApiResponse<any[]>;
 
       if (orgRes.ok && orgJson.ok) {
-        setOrgName(String(orgJson.data.name ?? ''));
-        setPrimaryColor(String(orgJson.data.brandPrimaryColor ?? '#111827'));
-        setSecondaryColor(String(orgJson.data.brandSecondaryColor ?? ''));
+        setOrgName(String(orgJson.data?.name ?? ''));
+        setPrimaryColor(String(orgJson.data?.brandPrimaryColor ?? '#111827'));
+        setSecondaryColor(String(orgJson.data?.brandSecondaryColor ?? ''));
       }
 
       if (settingsRes.ok && settingsJson.ok) {
-        setBusinessType(String(settingsJson.data?.businessType ?? ''));
-        setWorkdayStart(minutesToTimeString(settingsJson.data?.defaultWorkdayStartMinutes ?? 6 * 60));
-        setWorkdayEnd(minutesToTimeString(settingsJson.data?.defaultWorkdayEndMinutes ?? 18 * 60));
-        setDefaultJobDuration(String(settingsJson.data?.defaultJobDurationMinutes ?? 120));
-        setDefaultTravelBuffer(String(settingsJson.data?.defaultTravelBufferMinutes ?? 30));
-        setHqAddressLine1(String(settingsJson.data?.hqAddressLine1 ?? ''));
-        setHqAddressLine2(String(settingsJson.data?.hqAddressLine2 ?? ''));
-        setHqSuburb(String(settingsJson.data?.hqSuburb ?? ''));
-        setHqState(String(settingsJson.data?.hqState ?? ''));
-        setHqPostcode(String(settingsJson.data?.hqPostcode ?? ''));
+        setOfficeType(String(settingsJson.data?.officeType ?? ''));
+        const resolvedTimezone = String(settingsJson.data?.timezone ?? '') || detectTimezone();
+        setTimezone(resolvedTimezone);
+        const cadence = String(settingsJson.data?.reportCadence ?? 'weekly');
+        setReportCadence(cadence === 'fortnightly' ? 'fortnightly' : 'weekly');
+        const suburbs = Array.isArray(settingsJson.data?.serviceAreaSuburbs)
+          ? settingsJson.data.serviceAreaSuburbs.map((value: any) => String(value))
+          : [];
+        setServiceAreaSuburbs(normalizeStringList(suburbs));
+        setBuyerIntakePublicEnabled(Boolean(settingsJson.data?.buyerIntakePublicEnabled ?? false));
+        setBuyerIntakeManualEnabled(Boolean(settingsJson.data?.buyerIntakeManualEnabled ?? true));
+        const statusOptions = Array.isArray(settingsJson.data?.listingStatusOptions)
+          ? settingsJson.data.listingStatusOptions.map((value: any) => String(value))
+          : [];
+        setListingStatusOptions(
+          buildDraftList(statusOptions.length > 0 ? statusOptions : DEFAULT_LISTING_STATUSES, 'status')
+        );
+      } else {
+        setTimezone(detectTimezone());
+        setListingStatusOptions(buildDraftList(DEFAULT_LISTING_STATUSES, 'status'));
       }
 
       const resolvedLogo =
@@ -191,136 +258,71 @@ export default function OnboardingWizard() {
         (settingsRes.ok && settingsJson.ok ? settingsJson.data?.companyLogoPath : null);
       if (resolvedLogo !== undefined) setLogoPath(resolvedLogo ?? null);
 
-      const jobTypesJson = (await jobTypesRes.json()) as ApiResponse<any[]>;
-      const templatesJson = (await templatesRes.json()) as ApiResponse<any[]>;
-      if (jobTypesRes.ok && jobTypesJson.ok) {
-        const templates = templatesRes.ok && templatesJson.ok ? templatesJson.data || [] : [];
-        const templateByJobType = new Map<string, any>();
-        templates.forEach((tpl: any) => {
-          if (tpl.jobTypeId) templateByJobType.set(String(tpl.jobTypeId), tpl);
-        });
-
-        const nextJobTypes = jobTypesJson.data.map((row: any) => {
-          const tpl = templateByJobType.get(String(row.id));
-          const steps =
-            tpl?.steps && Array.isArray(tpl.steps)
-              ? tpl.steps.map((s: any) => ({
-                  id: makeId('step'),
-                  title: String(s.title ?? ''),
-                  description: String(s.description ?? ''),
-                  isRequired: Boolean(s.isRequired ?? true),
-                }))
-              : [];
-          return {
+      if (leadSourcesRes.ok && leadSourcesJson.ok && leadSourcesJson.data.length > 0) {
+        setLeadSources(
+          leadSourcesJson.data.map((row: any) => ({
             id: String(row.id),
-            label: String(row.label ?? ''),
-            defaultDurationMinutes: row.defaultDurationMinutes ? String(row.defaultDurationMinutes) : '',
-            requirePhotos: Boolean(row.requirePhotos),
-            requireMaterials: Boolean(row.requireMaterials),
-            requireReports: Boolean(row.requireReports),
-            templateId: tpl?.id ? String(tpl.id) : undefined,
-            steps: steps.length > 0 ? steps : [{ id: makeId('step'), title: '', description: '', isRequired: true }],
-          } as JobTypeDraft;
-        });
-
-        setJobTypes(
-          nextJobTypes.length > 0
-            ? nextJobTypes
-            : [
-                {
-                  label: '',
-                  defaultDurationMinutes: '',
-                  requirePhotos: false,
-                  requireMaterials: false,
-                  requireReports: false,
-                  steps: [{ id: makeId('step'), title: '', description: '', isRequired: true }],
-                },
-              ]
+            label: String(row.name ?? ''),
+            clientId: String(row.id ?? makeId('lead')),
+          }))
         );
       } else {
-        setJobTypes([
-          {
-            label: '',
-            defaultDurationMinutes: '',
-            requirePhotos: false,
-            requireMaterials: false,
-            requireReports: false,
-            steps: [{ id: makeId('step'), title: '', description: '', isRequired: true }],
-          },
-        ]);
+        setLeadSources(buildDraftList(DEFAULT_LEAD_SOURCES, 'lead'));
       }
 
-      const crewsJson = (await crewsRes.json()) as ApiResponse<any[]>;
-      if (crewsRes.ok && crewsJson.ok) {
-        const mapped = crewsJson.data.map((row: any) => ({
-          id: String(row.id),
-          firstName: String(row.firstName ?? ''),
-          lastName: String(row.lastName ?? ''),
-          role: String(row.role ?? ''),
-          email: String(row.email ?? ''),
-          phone: String(row.phone ?? ''),
-          skills: String(row.skills ?? ''),
-          dailyCapacityMinutes: String(row.dailyCapacityMinutes ?? ''),
-        }));
-        setCrews(
-          mapped.length > 0
-            ? mapped
-            : [
-                {
-                  firstName: '',
-                  lastName: '',
-                  role: '',
-                  email: '',
-                  phone: '',
-                  skills: '',
-                  dailyCapacityMinutes: '',
-                },
-              ]
+      if (buyerStagesRes.ok && buyerStagesJson.ok && buyerStagesJson.data.length > 0) {
+        setBuyerPipelineStages(
+          buyerStagesJson.data.map((row: any) => ({
+            id: String(row.id),
+            label: String(row.name ?? ''),
+            clientId: String(row.id ?? makeId('buyer-stage')),
+          }))
         );
       } else {
-        setCrews([
-          {
-            firstName: '',
-            lastName: '',
-            role: '',
-            email: '',
-            phone: '',
-            skills: '',
-            dailyCapacityMinutes: '',
-          },
-        ]);
+        setBuyerPipelineStages(buildDraftList(DEFAULT_BUYER_PIPELINE, 'buyer-stage'));
       }
 
-      const materialsJson = (await materialsRes.json()) as ApiResponse<any[]>;
-      if (materialsRes.ok && materialsJson.ok) {
-        const mapped = materialsJson.data.map((row: any) => ({
-          id: String(row.id),
-          name: String(row.name ?? ''),
-          unit: String(row.unit ?? ''),
-          startingStock: '',
-          lowStockThreshold: row.reorderThreshold ? String(row.reorderThreshold) : '',
-        }));
-        setMaterials(
-          mapped.length > 0
-            ? mapped
-            : [
-                {
-                  name: '',
-                  unit: '',
-                  startingStock: '',
-                  lowStockThreshold: '',
-                },
-              ]
+      if (listingStagesRes.ok && listingStagesJson.ok && listingStagesJson.data.length > 0) {
+        setListingPipelineStages(
+          listingStagesJson.data.map((row: any) => ({
+            id: String(row.id),
+            label: String(row.name ?? ''),
+            clientId: String(row.id ?? makeId('listing-stage')),
+          }))
         );
       } else {
-        setMaterials([
-          {
-            name: '',
-            unit: '',
-            startingStock: '',
-            lowStockThreshold: '',
-          },
-        ]);
+        setListingPipelineStages(buildDraftList(DEFAULT_LISTING_PIPELINE, 'listing-stage'));
+      }
+
+      if (matchingRes.ok && matchingJson.ok && matchingJson.data) {
+        setMatchingMode(matchingJson.data.mode === 'suburb' ? 'suburb' : 'zone');
+        setBudgetWeight(Number(matchingJson.data.budgetWeight ?? 25));
+        setLocationWeight(Number(matchingJson.data.locationWeight ?? 25));
+        setPropertyTypeWeight(Number(matchingJson.data.propertyTypeWeight ?? 20));
+        setBedsBathsWeight(Number(matchingJson.data.bedsBathsWeight ?? 15));
+        setTimeframeWeight(Number(matchingJson.data.timeframeWeight ?? 15));
+        setHotMatchThreshold(String(matchingJson.data.hotMatchThreshold ?? 85));
+        setGoodMatchThreshold(String(matchingJson.data.goodMatchThreshold ?? 70));
+      }
+
+      if (zonesRes.ok && zonesJson.ok) {
+        setZones(
+          zonesJson.data.map((zone: any) => ({
+            id: String(zone.id),
+            name: String(zone.name ?? ''),
+            suburbs: Array.isArray(zone.suburbs) ? zone.suburbs.map((value: any) => String(value)) : [],
+            clientId: String(zone.id ?? makeId('zone')),
+            suburbInput: '',
+          }))
+        );
+      }
+
+      if (reportRes.ok && reportJson.ok && reportJson.data.length > 0) {
+        const template = reportJson.data[0];
+        setIncludeDemandSummary(Boolean(template.includeDemandSummary ?? true));
+        setIncludeActivitySummary(Boolean(template.includeActivitySummary ?? true));
+        setIncludeMarketOverview(Boolean(template.includeMarketOverview ?? true));
+        setCommentaryTemplate(String(template.commentaryTemplate ?? DEFAULT_COMMENTARY_TEMPLATE));
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load onboarding data');
@@ -347,6 +349,8 @@ export default function OnboardingWizard() {
     [orgId]
   );
 
+  const triggerLogoPicker = () => logoInputRef.current?.click();
+
   const handleLogoUpload = async (file: File | null) => {
     if (!file || !orgId) return;
     const fileType = file.type?.toLowerCase?.() ?? '';
@@ -356,12 +360,12 @@ export default function OnboardingWizard() {
       fileType === 'image/jpg' ||
       /\.(png|jpe?g)$/i.test(file.name || '');
     if (!isSupported) {
-      setError('Only PNG or JPEG logos are supported.');
+      setLogoError('Only PNG or JPEG logos are supported.');
       if (logoInputRef.current) logoInputRef.current.value = '';
       return;
     }
     setLogoUploading(true);
-    setError(null);
+    setLogoError(null);
     try {
       const form = new FormData();
       form.set('orgId', orgId);
@@ -371,20 +375,20 @@ export default function OnboardingWizard() {
       const message = getApiErrorMessage(json);
       if (!res.ok || !json.ok) throw new Error(message || 'Failed to upload logo');
       setLogoPath(json.data.companyLogoPath ?? json.data.logoPath ?? null);
-      setSuccess('Logo uploaded');
+      setLogoSuccess('Logo uploaded');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to upload logo');
+      setLogoError(e instanceof Error ? e.message : 'Failed to upload logo');
     } finally {
       setLogoUploading(false);
       if (logoInputRef.current) logoInputRef.current.value = '';
-      setTimeout(() => setSuccess(null), 1500);
+      setTimeout(() => setLogoSuccess(null), 1500);
     }
   };
 
   const saveStep1 = async () => {
     if (!orgId) return;
     if (!orgName.trim()) {
-      setError('Organisation name is required.');
+      setError('Agency or office name is required.');
       return;
     }
     if (!primaryColor.trim()) {
@@ -395,31 +399,34 @@ export default function OnboardingWizard() {
     setSaving(true);
     setError(null);
     try {
-      const orgRes = await fetch('/api/orgs', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orgId,
-          name: orgName.trim(),
-          brandPrimaryColor: primaryColor.trim(),
-          brandSecondaryColor: secondaryColor.trim() || null,
+      await parseApiResponse(
+        await fetch('/api/orgs', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orgId,
+            name: orgName.trim(),
+            brandPrimaryColor: primaryColor.trim(),
+            brandSecondaryColor: secondaryColor.trim() || null,
+          }),
         }),
-      });
-      const orgJson = (await orgRes.json()) as ApiResponse<any>;
-      const orgMessage = getApiErrorMessage(orgJson);
-      if (!orgRes.ok || !orgJson.ok) throw new Error(orgMessage || 'Failed to save organisation');
+        'Failed to save agency'
+      );
 
-      await fetch('/api/settings', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orgId, companyName: orgName.trim() }),
-      });
+      await parseApiResponse(
+        await fetch('/api/settings', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orgId, companyName: orgName.trim() }),
+        }),
+        'Failed to save agency settings'
+      );
 
-      setSuccess('Organisation saved');
+      setSuccess('Agency saved');
       await updateOnboardingStep(2);
       setStep(2);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save organisation');
+      setError(e instanceof Error ? e.message : 'Failed to save agency');
     } finally {
       setSaving(false);
       setTimeout(() => setSuccess(null), 1500);
@@ -428,65 +435,39 @@ export default function OnboardingWizard() {
 
   const saveStep2 = async () => {
     if (!orgId) return;
-    const startMinutes = timeStringToMinutes(workdayStart);
-    const endMinutes = timeStringToMinutes(workdayEnd);
-    const jobDuration = defaultJobDuration.trim() ? Number(defaultJobDuration.trim()) : null;
-    const travelBuffer = defaultTravelBuffer.trim() ? Number(defaultTravelBuffer.trim()) : null;
-
-    if (startMinutes === null || endMinutes === null) {
-      setError('Enter workday hours as HH:MM.');
+    if (!officeType.trim()) {
+      setError('Select an office type.');
       return;
     }
-    if (jobDuration !== null && !Number.isFinite(jobDuration)) {
-      setError('Default job duration must be a number.');
+    if (!timezone.trim()) {
+      setError('Timezone is required.');
       return;
-    }
-    if (travelBuffer !== null && !Number.isFinite(travelBuffer)) {
-      setError('Travel buffer must be a number.');
-      return;
-    }
-    const hasAnyHqField =
-      hqAddressLine1.trim() ||
-      hqAddressLine2.trim() ||
-      hqSuburb.trim() ||
-      hqState.trim() ||
-      hqPostcode.trim();
-    if (hasAnyHqField) {
-      if (!hqAddressLine1.trim() || !hqSuburb.trim() || !hqPostcode.trim()) {
-        setError('HQ location needs address line 1, suburb, and postcode.');
-        return;
-      }
     }
 
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch('/api/settings', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orgId,
-          businessType: businessType.trim() || null,
-          defaultWorkdayStartMinutes: startMinutes,
-          defaultWorkdayEndMinutes: endMinutes,
-          defaultJobDurationMinutes: jobDuration,
-          defaultTravelBufferMinutes: travelBuffer,
-          hqAddressLine1: hqAddressLine1.trim() ? hqAddressLine1.trim() : null,
-          hqAddressLine2: hqAddressLine2.trim() ? hqAddressLine2.trim() : null,
-          hqSuburb: hqSuburb.trim() ? hqSuburb.trim() : null,
-          hqState: hqState.trim() ? hqState.trim() : null,
-          hqPostcode: hqPostcode.trim() ? hqPostcode.trim() : null,
+      const cleanedSuburbs = normalizeStringList(serviceAreaSuburbs);
+      await parseApiResponse(
+        await fetch('/api/settings', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orgId,
+            officeType: officeType.trim(),
+            timezone: timezone.trim(),
+            serviceAreaSuburbs: cleanedSuburbs,
+            reportCadence,
+          }),
         }),
-      });
-      const json = (await res.json()) as ApiResponse<any>;
-      const message = getApiErrorMessage(json);
-      if (!res.ok || !json.ok) throw new Error(message || 'Failed to save work structure');
+        'Failed to save team profile'
+      );
 
-      setSuccess('Work structure saved');
+      setSuccess('Team profile saved');
       await updateOnboardingStep(3);
       setStep(3);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save work structure');
+      setError(e instanceof Error ? e.message : 'Failed to save team profile');
     } finally {
       setSaving(false);
       setTimeout(() => setSuccess(null), 1500);
@@ -495,132 +476,56 @@ export default function OnboardingWizard() {
 
   const saveStep3 = async () => {
     if (!orgId) return;
+    const leadResult = normalizeListItems(leadSources, 'lead source');
+    if (leadResult.error) {
+      setError(leadResult.error);
+      return;
+    }
+    const pipelineResult = normalizeListItems(buyerPipelineStages, 'buyer pipeline stage');
+    if (pipelineResult.error) {
+      setError(pipelineResult.error);
+      return;
+    }
+
     setSaving(true);
     setError(null);
     try {
-      const activeRows = jobTypes.filter((row) => {
-        const hasInput =
-          row.label.trim() ||
-          row.defaultDurationMinutes.trim() ||
-          row.requirePhotos ||
-          row.requireMaterials ||
-          row.requireReports ||
-          row.steps.some((s) => s.title.trim() || s.description.trim());
-        return hasInput;
-      });
-
-      if (activeRows.length === 0) {
-        setError('Add at least one job type.');
-        setSaving(false);
-        return;
-      }
-
-      const nextJobTypes: JobTypeDraft[] = [];
-
-      for (const row of activeRows) {
-        const label = row.label.trim();
-        if (!label) throw new Error('Each job type needs a name.');
-
-        const steps = row.steps
-          .map((step) => ({
-            id: step.id,
-            title: step.title.trim(),
-            description: step.description.trim(),
-            isRequired: step.isRequired,
-          }))
-          .filter((step) => step.title.length > 0);
-
-        if (steps.length === 0) throw new Error(`Add at least one work step for "${label}".`);
-
-        const durationValue = row.defaultDurationMinutes.trim()
-          ? Number(row.defaultDurationMinutes.trim())
-          : null;
-        if (durationValue !== null && !Number.isFinite(durationValue)) {
-          throw new Error(`Default duration for "${label}" must be a number.`);
-        }
-
-        const jobTypeRes = await fetch('/api/job-types', {
-          method: row.id ? 'PATCH' : 'POST',
+      await parseApiResponse(
+        await fetch('/api/settings', {
+          method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             orgId,
-            id: row.id,
-            label,
-            defaultDurationMinutes: durationValue,
-            requirePhotos: row.requirePhotos,
-            requireMaterials: row.requireMaterials,
-            requireReports: row.requireReports,
-            isDefault: true,
+            buyerIntakePublicEnabled,
+            buyerIntakeManualEnabled,
           }),
-        });
-        const jobTypeJson = (await jobTypeRes.json()) as ApiResponse<any>;
-        const jobTypeMessage = getApiErrorMessage(jobTypeJson);
-        if (!jobTypeRes.ok || !jobTypeJson.ok) {
-          throw new Error(jobTypeMessage || 'Failed to save job type');
-        }
-
-        const jobTypeId = String(jobTypeJson.data.id);
-        const stepsPayload = steps.map((step, index) => ({
-          title: step.title,
-          description: step.description || null,
-          isRequired: step.isRequired,
-          sortOrder: index,
-        }));
-
-        const templateRes = await fetch('/api/work-templates', {
-          method: row.templateId ? 'PATCH' : 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: row.templateId,
-            orgId,
-            jobTypeId,
-            name: `${label} template`,
-            description: null,
-            isDefault: true,
-            steps: stepsPayload,
-          }),
-        });
-        const templateJson = (await templateRes.json()) as ApiResponse<any>;
-        const templateMessage = getApiErrorMessage(templateJson);
-        if (!templateRes.ok || !templateJson.ok) {
-          throw new Error(templateMessage || 'Failed to save work template');
-        }
-
-        nextJobTypes.push({
-          ...row,
-          id: jobTypeId,
-          templateId: String(templateJson.data.id),
-          label,
-          defaultDurationMinutes: durationValue === null ? '' : String(durationValue),
-          steps: steps.map((step) => ({
-            id: step.id || makeId('step'),
-            title: step.title,
-            description: step.description,
-            isRequired: step.isRequired,
-          })),
-        });
-      }
-
-      setJobTypes(
-        nextJobTypes.length > 0
-          ? nextJobTypes
-          : [
-              {
-                label: '',
-                defaultDurationMinutes: '',
-                requirePhotos: false,
-                requireMaterials: false,
-                requireReports: false,
-                steps: [{ id: makeId('step'), title: '', description: '', isRequired: true }],
-              },
-            ]
+        }),
+        'Failed to save intake settings'
       );
 
-      setSuccess('Job types saved');
+      await parseApiResponse(
+        await fetch('/api/lead-sources', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orgId, sources: leadResult.items }),
+        }),
+        'Failed to save lead sources'
+      );
+
+      await parseApiResponse(
+        await fetch('/api/buyer-pipeline', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orgId, stages: pipelineResult.items }),
+        }),
+        'Failed to save buyer pipeline'
+      );
+
+      setSuccess('Buyer intake saved');
       await updateOnboardingStep(4);
       setStep(4);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save job types');
+      setError(e instanceof Error ? e.message : 'Failed to save buyer intake');
     } finally {
       setSaving(false);
       setTimeout(() => setSuccess(null), 1500);
@@ -629,99 +534,47 @@ export default function OnboardingWizard() {
 
   const saveStep4 = async () => {
     if (!orgId) return;
+    const listingStagesResult = normalizeListItems(listingPipelineStages, 'listing pipeline stage');
+    if (listingStagesResult.error) {
+      setError(listingStagesResult.error);
+      return;
+    }
+
+    const statusOptions = normalizeStringList(listingStatusOptions.map((item) => item.label));
+    if (statusOptions.length === 0) {
+      setError('Add at least one listing status.');
+      return;
+    }
+
     setSaving(true);
     setError(null);
     try {
-      const activeRows = crews.filter((row) => {
-        const hasInput =
-          row.firstName.trim() ||
-          row.lastName.trim() ||
-          row.role.trim() ||
-          row.email.trim() ||
-          row.phone.trim() ||
-          row.skills.trim() ||
-          row.dailyCapacityMinutes.trim();
-        return hasInput;
-      });
-
-      if (activeRows.length === 0) {
-        setError('Add at least one crew member.');
-        setSaving(false);
-        return;
-      }
-
-      const defaultStart = timeStringToMinutes(workdayStart) ?? 6 * 60;
-      const defaultEnd = timeStringToMinutes(workdayEnd) ?? 18 * 60;
-      const nextCrews: CrewDraft[] = [];
-
-      for (const row of activeRows) {
-        const firstName = row.firstName.trim();
-        const lastName = row.lastName.trim();
-        if (!firstName || !lastName) throw new Error('Crew members need both first and last name.');
-
-        const capacityValue = row.dailyCapacityMinutes.trim()
-          ? Number(row.dailyCapacityMinutes.trim())
-          : 8 * 60;
-        if (!Number.isFinite(capacityValue)) throw new Error(`Capacity for ${firstName} ${lastName} must be a number.`);
-
-        const crewRes = await fetch('/api/crews', {
-          method: row.id ? 'PATCH' : 'POST',
+      await parseApiResponse(
+        await fetch('/api/settings', {
+          method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             orgId,
-            id: row.id,
-            firstName,
-            lastName,
-            role: row.role.trim() || 'staff',
-            email: row.email.trim() || null,
-            phone: row.phone.trim() || null,
-            skills: row.skills.trim() || null,
-            active: true,
-            defaultStartMinutes: defaultStart,
-            defaultEndMinutes: defaultEnd,
-            dailyCapacityMinutes: capacityValue,
+            listingStatusOptions: statusOptions,
           }),
-        });
-        const crewJson = (await crewRes.json()) as ApiResponse<any>;
-        const crewMessage = getApiErrorMessage(crewJson);
-        if (!crewRes.ok || !crewJson.ok) {
-          throw new Error(crewMessage || 'Failed to save crew member');
-        }
-
-        nextCrews.push({
-          ...row,
-          id: String(crewJson.data.id),
-          firstName,
-          lastName,
-          role: row.role.trim(),
-          email: row.email.trim(),
-          phone: row.phone.trim(),
-          skills: row.skills.trim(),
-          dailyCapacityMinutes: String(capacityValue),
-        });
-      }
-
-      setCrews(
-        nextCrews.length > 0
-          ? nextCrews
-          : [
-              {
-                firstName: '',
-                lastName: '',
-                role: '',
-                email: '',
-                phone: '',
-                skills: '',
-                dailyCapacityMinutes: '',
-              },
-            ]
+        }),
+        'Failed to save listing settings'
       );
 
-      setSuccess('Crew saved');
+      await parseApiResponse(
+        await fetch('/api/listing-pipeline', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orgId, stages: listingStagesResult.items }),
+        }),
+        'Failed to save listing pipeline'
+      );
+
+      setSuccess('Listing pipeline saved');
       await updateOnboardingStep(5);
       setStep(5);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save crew');
+      setError(e instanceof Error ? e.message : 'Failed to save listing pipeline');
     } finally {
       setSaving(false);
       setTimeout(() => setSuccess(null), 1500);
@@ -730,238 +583,224 @@ export default function OnboardingWizard() {
 
   const saveStep5 = async () => {
     if (!orgId) return;
+
+    const hotValue = Number(hotMatchThreshold);
+    const goodValue = Number(goodMatchThreshold);
+
+    if (!Number.isFinite(hotValue) || !Number.isFinite(goodValue)) {
+      setError('Match thresholds must be numbers.');
+      return;
+    }
+    if (goodValue > hotValue) {
+      setError('Good match threshold must be below hot match threshold.');
+      return;
+    }
+
     setSaving(true);
     setError(null);
     try {
-      const activeRows = materials.filter((row) => {
-        const hasInput =
-          row.name.trim() || row.unit.trim() || row.startingStock.trim() || row.lowStockThreshold.trim();
-        return hasInput;
-      });
-
-      if (activeRows.length === 0) {
-        await updateOnboardingStep(6);
-        setStep(6);
-        return;
-      }
-
-      const nextMaterials: MaterialDraft[] = [];
-
-      for (const row of activeRows) {
-        const name = row.name.trim();
-        const unit = row.unit.trim();
-        if (!name || !unit) throw new Error('Materials need both a name and a unit.');
-
-        const thresholdValue = row.lowStockThreshold.trim() ? Number(row.lowStockThreshold.trim()) : null;
-        if (thresholdValue !== null && !Number.isFinite(thresholdValue)) {
-          throw new Error(`Low stock threshold for ${name} must be a number.`);
-        }
-
-        const materialRes = await fetch('/api/materials', {
-          method: row.id ? 'PATCH' : 'POST',
+      await parseApiResponse(
+        await fetch('/api/matching-config', {
+          method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             orgId,
-            id: row.id,
-            name,
-            unit,
-            reorderThreshold: thresholdValue,
+            mode: matchingMode,
+            budgetWeight,
+            locationWeight,
+            propertyTypeWeight,
+            bedsBathsWeight,
+            timeframeWeight,
+            hotMatchThreshold: hotValue,
+            goodMatchThreshold: goodValue,
           }),
-        });
-        const materialJson = (await materialRes.json()) as ApiResponse<any>;
-        const materialMessage = getApiErrorMessage(materialJson);
-        if (!materialRes.ok || !materialJson.ok) {
-          throw new Error(materialMessage || 'Failed to save material');
-        }
-
-        const materialId = String(materialJson.data.id);
-        const startingStockValue = row.startingStock.trim() ? Number(row.startingStock.trim()) : null;
-        if (startingStockValue !== null && !Number.isFinite(startingStockValue)) {
-          throw new Error(`Starting stock for ${name} must be a number.`);
-        }
-        if (startingStockValue !== null && startingStockValue < 0) {
-          throw new Error(`Starting stock for ${name} cannot be negative.`);
-        }
-
-        if (startingStockValue && startingStockValue > 0) {
-          await fetch('/api/material-inventory-events', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              orgId,
-              materialId,
-              eventType: 'stock_added',
-              quantity: startingStockValue,
-              reason: 'Initial stock',
-            }),
-          });
-        }
-
-        nextMaterials.push({
-          ...row,
-          id: materialId,
-          name,
-          unit,
-          lowStockThreshold: thresholdValue === null ? '' : String(thresholdValue),
-          startingStock: '',
-        });
-      }
-
-      setMaterials(
-        nextMaterials.length > 0
-          ? nextMaterials
-          : [
-              {
-                name: '',
-                unit: '',
-                startingStock: '',
-                lowStockThreshold: '',
-              },
-            ]
+        }),
+        'Failed to save matching config'
       );
 
-      setSuccess('Materials saved');
+      if (matchingMode === 'zone') {
+        const zonePayload = zones.map((zone) => ({
+          id: zone.id,
+          name: zone.name.trim(),
+          suburbs: normalizeStringList(zone.suburbs),
+        }));
+        await parseApiResponse(
+          await fetch('/api/suburb-zones', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orgId, zones: zonePayload }),
+          }),
+          'Failed to save suburb zones'
+        );
+      }
+
+      setSuccess('Matching setup saved');
       await updateOnboardingStep(6);
       setStep(6);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save materials');
+      setError(e instanceof Error ? e.message : 'Failed to save matching setup');
     } finally {
       setSaving(false);
       setTimeout(() => setSuccess(null), 1500);
     }
   };
 
-  const finishOnboarding = async () => {
+  const completeOnboarding = async () => {
+    await parseApiResponse(
+      await fetch('/api/orgs', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orgId, onboardingCompleted: true, onboardingStep: STEPS.length }),
+      }),
+      'Failed to complete onboarding'
+    );
+    await refresh();
+    router.replace('/dashboard');
+  };
+
+  const saveStep6 = async () => {
     if (!orgId) return;
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch('/api/orgs', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orgId, onboardingCompleted: true, onboardingStep: STEPS.length }),
-      });
-      const json = (await res.json()) as ApiResponse<any>;
-      const message = getApiErrorMessage(json);
-      if (!res.ok || !json.ok) throw new Error(message || 'Failed to complete onboarding');
+      await parseApiResponse(
+        await fetch('/api/report-templates', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orgId,
+            templateType: 'vendor',
+            name: 'Vendor report',
+            includeDemandSummary,
+            includeActivitySummary,
+            includeMarketOverview,
+            commentaryTemplate: commentaryTemplate.trim() || null,
+          }),
+        }),
+        'Failed to save report template'
+      );
+
+      await parseApiResponse(
+        await fetch('/api/settings', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orgId, reportCadence }),
+        }),
+        'Failed to save report cadence'
+      );
+
+      if (createDemoData) {
+        await parseApiResponse(
+          await fetch('/api/demo/seed-real-estate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orgId }),
+          }),
+          'Failed to seed demo data'
+        );
+      }
+
       setSuccess('Setup complete');
-      await refresh();
-      router.replace('/dashboard');
+      await completeOnboarding();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to complete onboarding');
+      setError(e instanceof Error ? e.message : 'Failed to finish onboarding');
     } finally {
       setSaving(false);
       setTimeout(() => setSuccess(null), 1500);
     }
   };
 
-  const addJobType = () => {
-    setJobTypes((prev) => [
-      ...prev,
-      {
-        label: '',
-        defaultDurationMinutes: '',
-        requirePhotos: false,
-        requireMaterials: false,
-        requireReports: false,
-        steps: [{ id: makeId('step'), title: '', description: '', isRequired: true }],
-      },
-    ]);
+  const addLeadSource = () => {
+    setLeadSources((prev) => [...prev, { clientId: makeId('lead'), label: '' }]);
   };
 
-  const updateJobType = (index: number, patch: Partial<JobTypeDraft>) => {
-    setJobTypes((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  const updateLeadSource = (index: number, patch: Partial<ListItemDraft>) => {
+    setLeadSources((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   };
 
-  const removeJobType = (index: number) => {
-    setJobTypes((prev) => prev.filter((_, i) => i !== index));
+  const removeLeadSource = (index: number) => {
+    setLeadSources((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const addJobStep = (jobIndex: number) => {
-    setJobTypes((prev) =>
-      prev.map((row, i) =>
-        i === jobIndex
-          ? {
-              ...row,
-              steps: [...row.steps, { id: makeId('step'), title: '', description: '', isRequired: true }],
-            }
-          : row
-      )
-    );
+  const addBuyerStage = () => {
+    setBuyerPipelineStages((prev) => [...prev, { clientId: makeId('buyer-stage'), label: '' }]);
   };
 
-  const updateJobStep = (
-    jobIndex: number,
-    stepIndex: number,
-    patch: Partial<JobTypeDraft['steps'][number]>
-  ) => {
-    setJobTypes((prev) =>
-      prev.map((row, i) => {
-        if (i !== jobIndex) return row;
-        return {
-          ...row,
-          steps: row.steps.map((step, idx) => (idx === stepIndex ? { ...step, ...patch } : step)),
-        };
+  const updateBuyerStage = (index: number, patch: Partial<ListItemDraft>) => {
+    setBuyerPipelineStages((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  };
+
+  const removeBuyerStage = (index: number) => {
+    setBuyerPipelineStages((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const addListingStage = () => {
+    setListingPipelineStages((prev) => [...prev, { clientId: makeId('listing-stage'), label: '' }]);
+  };
+
+  const updateListingStage = (index: number, patch: Partial<ListItemDraft>) => {
+    setListingPipelineStages((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  };
+
+  const removeListingStage = (index: number) => {
+    setListingPipelineStages((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const addListingStatus = () => {
+    setListingStatusOptions((prev) => [...prev, { clientId: makeId('status'), label: '' }]);
+  };
+
+  const updateListingStatus = (index: number, patch: Partial<ListItemDraft>) => {
+    setListingStatusOptions((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  };
+
+  const removeListingStatus = (index: number) => {
+    setListingStatusOptions((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const addServiceAreaSuburb = () => {
+    const next = normalizeStringList([...serviceAreaSuburbs, serviceAreaInput]);
+    setServiceAreaSuburbs(next);
+    setServiceAreaInput('');
+  };
+
+  const removeServiceAreaSuburb = (value: string) => {
+    setServiceAreaSuburbs((prev) => prev.filter((item) => item.toLowerCase() !== value.toLowerCase()));
+  };
+
+  const addZone = () => {
+    setZones((prev) => [...prev, { clientId: makeId('zone'), name: '', suburbs: [], suburbInput: '' }]);
+  };
+
+  const updateZone = (index: number, patch: Partial<ZoneDraft>) => {
+    setZones((prev) => prev.map((zone, i) => (i === index ? { ...zone, ...patch } : zone)));
+  };
+
+  const removeZone = (index: number) => {
+    setZones((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const addZoneSuburb = (index: number) => {
+    setZones((prev) =>
+      prev.map((zone, i) => {
+        if (i !== index) return zone;
+        const suburbs = normalizeStringList([...zone.suburbs, zone.suburbInput]);
+        return { ...zone, suburbs, suburbInput: '' };
       })
     );
   };
 
-  const removeJobStep = (jobIndex: number, stepIndex: number) => {
-    setJobTypes((prev) =>
-      prev.map((row, i) => {
-        if (i !== jobIndex) return row;
+  const removeZoneSuburb = (index: number, suburb: string) => {
+    setZones((prev) =>
+      prev.map((zone, i) => {
+        if (i !== index) return zone;
         return {
-          ...row,
-          steps: row.steps.filter((_, idx) => idx !== stepIndex),
+          ...zone,
+          suburbs: zone.suburbs.filter((item) => item.toLowerCase() !== suburb.toLowerCase()),
         };
       })
     );
   };
-
-  const addCrew = () => {
-    setCrews((prev) => [
-      ...prev,
-      {
-        firstName: '',
-        lastName: '',
-        role: '',
-        email: '',
-        phone: '',
-        skills: '',
-        dailyCapacityMinutes: '',
-      },
-    ]);
-  };
-
-  const updateCrew = (index: number, patch: Partial<CrewDraft>) => {
-    setCrews((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
-  };
-
-  const removeCrew = (index: number) => {
-    setCrews((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const addMaterial = () => {
-    setMaterials((prev) => [
-      ...prev,
-      {
-        name: '',
-        unit: '',
-        startingStock: '',
-        lowStockThreshold: '',
-      },
-    ]);
-  };
-
-  const updateMaterial = (index: number, patch: Partial<MaterialDraft>) => {
-    setMaterials((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
-  };
-
-  const removeMaterial = (index: number) => {
-    setMaterials((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const triggerLogoPicker = () => logoInputRef.current?.click();
 
   if (loading || loadingState) {
     return (
@@ -988,9 +827,9 @@ export default function OnboardingWizard() {
   }
 
   const stepMeta = STEPS[step - 1];
-  const summaryJobTypes = jobTypes.filter((row) => row.label.trim());
-  const summaryCrews = crews.filter((row) => row.firstName.trim() || row.lastName.trim());
-  const summaryMaterials = materials.filter((row) => row.name.trim());
+  const summaryBuyerStages = buyerPipelineStages.filter((row) => row.label.trim());
+  const summaryListingStages = listingPipelineStages.filter((row) => row.label.trim());
+  const summaryZones = zones.filter((zone) => zone.name.trim());
 
   return (
     <div className="min-h-screen bg-bg-base">
@@ -998,9 +837,9 @@ export default function OnboardingWizard() {
         <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.25em] text-text-tertiary">Onboarding</p>
-            <h1 className="mt-2 text-3xl font-bold text-text-primary">Set up your organisation</h1>
+            <h1 className="mt-2 text-3xl font-bold text-text-primary">Set up your agency workspace</h1>
             <p className="mt-2 text-sm text-text-secondary">
-              Complete the steps below to tailor the workspace to your operations.
+              Capture the essentials for selling agent operations, then expand as you grow.
             </p>
           </div>
           <div className="text-sm text-text-secondary">Step {step} of {STEPS.length}</div>
@@ -1008,10 +847,7 @@ export default function OnboardingWizard() {
 
         <div className="mb-6">
           <div className="h-2 w-full rounded-full bg-bg-section/70 overflow-hidden">
-            <div
-              className="h-full bg-accent-gold transition-all"
-              style={{ width: `${progressPercent}%` }}
-            />
+            <div className="h-full bg-accent-gold transition-all" style={{ width: `${progressPercent}%` }} />
           </div>
         </div>
 
@@ -1023,8 +859,8 @@ export default function OnboardingWizard() {
             </div>
             <div className="space-y-4">
               {STEPS.map((s) => {
-                const isDone = s.id < step;
                 const isActive = s.id === step;
+                const isDone = s.id < step;
                 return (
                   <div key={s.id} className="flex items-start gap-3">
                     {isDone ? (
@@ -1056,8 +892,9 @@ export default function OnboardingWizard() {
                 {error}
               </div>
             )}
+
             {success && (
-              <div className="rounded-md border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-400">
+              <div className="rounded-md border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-200">
                 {success}
               </div>
             )}
@@ -1066,10 +903,10 @@ export default function OnboardingWizard() {
               <div className="space-y-6">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <Input
-                    label="Organisation name"
+                    label="Agency or office name"
                     value={orgName}
                     onChange={(e) => setOrgName(e.target.value)}
-                    placeholder="Enter organisation name"
+                    placeholder="Enter agency name"
                   />
                   <div className="space-y-3">
                     <div className="flex items-end gap-3">
@@ -1104,16 +941,18 @@ export default function OnboardingWizard() {
                     <div className="h-12 w-12 rounded-md border border-border-subtle bg-bg-section/30 overflow-hidden flex items-center justify-center">
                       {logoPath ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={logoPath} alt={`${orgName || 'Organisation'} logo`} className="h-full w-full object-cover" />
+                        <img src={logoPath} alt={`${orgName || 'Agency'} logo`} className="h-full w-full object-cover" />
                       ) : (
                         <span className="text-xs text-text-tertiary">Logo</span>
                       )}
                     </div>
                     <div>
                       <p className="text-sm font-medium text-text-primary">
-                        {orgName.trim() || 'Organisation branding'}
+                        {orgName.trim() || 'Agency branding'}
                       </p>
-                      <p className="text-xs text-text-tertiary">{logoPath ? 'Logo uploaded' : 'Upload a logo (optional)'}</p>
+                      <p className="text-xs text-text-tertiary">
+                        {logoPath ? 'Logo uploaded' : 'Upload a logo (optional)'}
+                      </p>
                     </div>
                   </div>
                   <div>
@@ -1124,12 +963,32 @@ export default function OnboardingWizard() {
                       className="hidden"
                       onChange={(e) => handleLogoUpload(e.target.files?.[0] ?? null)}
                     />
-                    <Button variant="secondary" onClick={triggerLogoPicker} disabled={saving || logoUploading}>
-                      {logoUploading ? 'Uploading...' : 'Upload logo'}
-                    </Button>
-                    <p className="mt-1 text-[11px] text-text-tertiary">JPG/PNG only.</p>
+                    <div className="flex items-center gap-2">
+                      <Button variant="secondary" onClick={triggerLogoPicker} disabled={saving || logoUploading}>
+                        {logoUploading ? 'Uploading...' : 'Upload logo'}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={saveStep1}
+                        disabled={saving || logoUploading}
+                      >
+                        Skip for now
+                      </Button>
+                    </div>
+                    <p className="mt-1 text-[11px] text-text-tertiary">JPG/PNG only. Optional.</p>
                   </div>
                 </div>
+
+                {logoError && (
+                  <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
+                    {logoError}
+                  </div>
+                )}
+                {logoSuccess && (
+                  <div className="rounded-md border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs text-emerald-200">
+                    {logoSuccess}
+                  </div>
+                )}
 
                 <div className="flex items-center justify-end gap-2">
                   <Button onClick={saveStep1} disabled={saving || logoUploading}>
@@ -1142,79 +1001,53 @@ export default function OnboardingWizard() {
             {step === 2 && (
               <div className="space-y-6">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <Input
-                    label="Business type"
-                    value={businessType}
-                    onChange={(e) => setBusinessType(e.target.value)}
-                    placeholder="e.g. Residential services, commercial installs"
-                  />
-                  <Input
-                    label="Default job duration (minutes)"
-                    inputMode="numeric"
-                    value={defaultJobDuration}
-                    onChange={(e) => setDefaultJobDuration(e.target.value.replace(/[^\d]/g, ''))}
-                    placeholder="120"
-                  />
+                  <Select label="Office type" value={officeType} onChange={(e) => setOfficeType(e.target.value)}>
+                    <option value="">Select office type</option>
+                    <option value="solo">Solo agent</option>
+                    <option value="team">Team</option>
+                    <option value="multi-agent">Multi-agent office</option>
+                  </Select>
+                  <Select
+                    label="Default report cadence"
+                    value={reportCadence}
+                    onChange={(e) => setReportCadence(e.target.value as 'weekly' | 'fortnightly')}
+                  >
+                    <option value="weekly">Weekly</option>
+                    <option value="fortnightly">Fortnightly</option>
+                  </Select>
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <Input
-                    label="Workday start"
-                    type="time"
-                    value={workdayStart}
-                    onChange={(e) => setWorkdayStart(e.target.value)}
+                    label="Timezone"
+                    value={timezone}
+                    onChange={(e) => setTimezone(e.target.value)}
+                    placeholder="Australia/Perth"
                   />
-                  <Input
-                    label="Workday end"
-                    type="time"
-                    value={workdayEnd}
-                    onChange={(e) => setWorkdayEnd(e.target.value)}
-                  />
-                  <Input
-                    label="Default travel buffer (minutes)"
-                    inputMode="numeric"
-                    value={defaultTravelBuffer}
-                    onChange={(e) => setDefaultTravelBuffer(e.target.value.replace(/[^\d]/g, ''))}
-                    placeholder="30"
-                  />
-                </div>
-
-                <div className="rounded-md border border-border-subtle bg-bg-section/20 p-4">
-                  <p className="text-sm font-semibold text-text-primary">HQ location (optional)</p>
-                  <p className="text-xs text-text-tertiary mt-1">
-                    Used for travel-aware scheduling when crews start or finish at HQ.
-                  </p>
-                  <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <Input
-                      label="Address line 1"
-                      value={hqAddressLine1}
-                      onChange={(e) => setHqAddressLine1(e.target.value)}
-                      placeholder="123 Example St"
-                    />
-                    <Input
-                      label="Address line 2"
-                      value={hqAddressLine2}
-                      onChange={(e) => setHqAddressLine2(e.target.value)}
-                      placeholder="Unit, suite, etc. (optional)"
-                    />
-                    <Input
-                      label="Suburb"
-                      value={hqSuburb}
-                      onChange={(e) => setHqSuburb(e.target.value)}
-                      placeholder="e.g. Fremantle"
-                    />
-                    <Input
-                      label="State"
-                      value={hqState}
-                      onChange={(e) => setHqState(e.target.value)}
-                      placeholder="e.g. WA"
-                    />
-                    <Input
-                      label="Postcode"
-                      value={hqPostcode}
-                      onChange={(e) => setHqPostcode(e.target.value)}
-                      placeholder="e.g. 6160"
-                    />
+                  <div className="rounded-md border border-border-subtle bg-bg-section/20 p-4">
+                    <p className="text-sm font-semibold text-text-primary">Service area suburbs</p>
+                    <p className="text-xs text-text-tertiary mt-1">Add the suburbs you commonly work in.</p>
+                    <div className="mt-3 flex gap-2">
+                      <Input
+                        label="Add suburb"
+                        value={serviceAreaInput}
+                        onChange={(e) => setServiceAreaInput(e.target.value)}
+                        placeholder="e.g. Paddington"
+                      />
+                      <Button variant="secondary" onClick={addServiceAreaSuburb}>
+                        Add
+                      </Button>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {serviceAreaSuburbs.map((suburb) => (
+                        <Chip key={suburb} active onClick={() => removeServiceAreaSuburb(suburb)}>
+                          {suburb}
+                        </Chip>
+                      ))}
+                      {serviceAreaSuburbs.length === 0 && (
+                        <span className="text-xs text-text-tertiary">No suburbs added yet.</span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -1231,251 +1064,324 @@ export default function OnboardingWizard() {
 
             {step === 3 && (
               <div className="space-y-6">
-                <div className="space-y-4">
-                  {jobTypes.map((row, index) => (
-                    <div key={row.id ?? `job-${index}`} className="rounded-md border border-border-subtle bg-bg-section/20 p-4 space-y-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-3 w-full">
-                          <Input
-                            label="Job type name"
-                            value={row.label}
-                            onChange={(e) => updateJobType(index, { label: e.target.value })}
-                            placeholder="e.g. Install, Repair"
-                          />
-                          <Input
-                            label="Default duration (minutes)"
-                            inputMode="numeric"
-                            value={row.defaultDurationMinutes}
-                            onChange={(e) =>
-                              updateJobType(index, { defaultDurationMinutes: e.target.value.replace(/[^\d]/g, '') })
-                            }
-                            placeholder="120"
-                          />
-                          <div>
-                            <p className="text-sm font-medium text-text-secondary mb-2">Required fields</p>
-                            <div className="flex flex-wrap gap-2">
-                              <Chip active={row.requirePhotos} onClick={() => updateJobType(index, { requirePhotos: !row.requirePhotos })}>
-                                Photos
-                              </Chip>
-                              <Chip active={row.requireMaterials} onClick={() => updateJobType(index, { requireMaterials: !row.requireMaterials })}>
-                                Materials
-                              </Chip>
-                              <Chip active={row.requireReports} onClick={() => updateJobType(index, { requireReports: !row.requireReports })}>
-                                Reports
-                              </Chip>
-                            </div>
-                          </div>
-                        </div>
-                        {jobTypes.length > 1 && (
-                          <Button variant="ghost" size="sm" onClick={() => removeJobType(index)}>
+                <div className="rounded-md border border-border-subtle bg-bg-section/20 p-4 space-y-4">
+                  <div>
+                    <p className="text-sm font-semibold text-text-primary">Buyer intake options</p>
+                    <p className="text-xs text-text-tertiary mt-1">Control how buyers enter the pipeline.</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Chip
+                      active={buyerIntakePublicEnabled}
+                      onClick={() => setBuyerIntakePublicEnabled(!buyerIntakePublicEnabled)}
+                    >
+                      Public intake form {buyerIntakePublicEnabled ? 'On' : 'Off'}
+                    </Chip>
+                    <Chip
+                      active={buyerIntakeManualEnabled}
+                      onClick={() => setBuyerIntakeManualEnabled(!buyerIntakeManualEnabled)}
+                    >
+                      Manual add {buyerIntakeManualEnabled ? 'On' : 'Off'}
+                    </Chip>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                  <div className="space-y-4">
+                    <p className="text-sm font-semibold text-text-primary">Lead sources</p>
+                    {leadSources.map((row, index) => (
+                      <div key={row.clientId} className="flex items-center gap-2">
+                        <Input
+                          label={`Source ${index + 1}`}
+                          value={row.label}
+                          onChange={(e) => updateLeadSource(index, { label: e.target.value })}
+                          placeholder="e.g. Referral"
+                        />
+                        {leadSources.length > 1 && (
+                          <Button variant="ghost" size="sm" onClick={() => removeLeadSource(index)}>
                             Remove
                           </Button>
                         )}
                       </div>
+                    ))}
+                    <Button variant="secondary" size="sm" onClick={addLeadSource}>
+                      Add source
+                    </Button>
+                  </div>
 
-                      <div className="space-y-3">
-                        <p className="text-sm font-medium text-text-secondary">Work steps</p>
-                        {row.steps.map((stepRow, stepIndex) => (
-                          <div key={stepRow.id} className="rounded-md border border-border-subtle bg-bg-section/30 p-3 space-y-3">
-                            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                              <Input
-                                label="Step title"
-                                value={stepRow.title}
-                                onChange={(e) => updateJobStep(index, stepIndex, { title: e.target.value })}
-                                placeholder="Step name"
-                              />
-                              <div className="md:col-span-2">
-                                <Textarea
-                                  label="Description"
-                                  value={stepRow.description}
-                                  onChange={(e) => updateJobStep(index, stepIndex, { description: e.target.value })}
-                                  placeholder="Optional details for this step"
-                                  rows={2}
-                                />
-                              </div>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <Chip active={stepRow.isRequired} onClick={() => updateJobStep(index, stepIndex, { isRequired: !stepRow.isRequired })}>
-                                {stepRow.isRequired ? 'Required' : 'Optional'}
-                              </Chip>
-                              {row.steps.length > 1 && (
-                                <Button variant="ghost" size="sm" onClick={() => removeJobStep(index, stepIndex)}>
-                                  Remove step
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                        <Button variant="secondary" size="sm" onClick={() => addJobStep(index)}>
-                          Add step
-                        </Button>
+                  <div className="space-y-4">
+                    <p className="text-sm font-semibold text-text-primary">Buyer pipeline stages</p>
+                    {buyerPipelineStages.map((row, index) => (
+                      <div key={row.clientId} className="flex items-center gap-2">
+                        <Input
+                          label={`Stage ${index + 1}`}
+                          value={row.label}
+                          onChange={(e) => updateBuyerStage(index, { label: e.target.value })}
+                          placeholder="e.g. Qualified"
+                        />
+                        {buyerPipelineStages.length > 1 && (
+                          <Button variant="ghost" size="sm" onClick={() => removeBuyerStage(index)}>
+                            Remove
+                          </Button>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                    <Button variant="secondary" size="sm" onClick={addBuyerStage}>
+                      Add stage
+                    </Button>
+                  </div>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center justify-between gap-2">
                   <Button variant="secondary" onClick={() => setStep(2)} disabled={saving}>
                     Back
                   </Button>
-                  <div className="flex items-center gap-2">
-                    <Button variant="secondary" onClick={addJobType}>
-                      Add job type
-                    </Button>
-                    <Button onClick={saveStep3} disabled={saving}>
-                      {saving ? 'Saving...' : 'Save and continue'}
-                    </Button>
-                  </div>
+                  <Button onClick={saveStep3} disabled={saving}>
+                    {saving ? 'Saving...' : 'Save and continue'}
+                  </Button>
                 </div>
               </div>
             )}
 
             {step === 4 && (
               <div className="space-y-6">
-                <div className="space-y-4">
-                  {crews.map((row, index) => (
-                    <div key={row.id ?? `crew-${index}`} className="rounded-md border border-border-subtle bg-bg-section/20 p-4 space-y-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-3 w-full">
-                          <Input
-                            label="First name"
-                            value={row.firstName}
-                            onChange={(e) => updateCrew(index, { firstName: e.target.value })}
-                          />
-                          <Input
-                            label="Last name"
-                            value={row.lastName}
-                            onChange={(e) => updateCrew(index, { lastName: e.target.value })}
-                          />
-                          <Input
-                            label="Role"
-                            value={row.role}
-                            onChange={(e) => updateCrew(index, { role: e.target.value })}
-                            placeholder="e.g. Lead installer"
-                          />
-                        </div>
-                        {crews.length > 1 && (
-                          <Button variant="ghost" size="sm" onClick={() => removeCrew(index)}>
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                  <div className="space-y-4">
+                    <p className="text-sm font-semibold text-text-primary">Listing pipeline stages</p>
+                    {listingPipelineStages.map((row, index) => (
+                      <div key={row.clientId} className="flex items-center gap-2">
+                        <Input
+                          label={`Stage ${index + 1}`}
+                          value={row.label}
+                          onChange={(e) => updateListingStage(index, { label: e.target.value })}
+                          placeholder="e.g. Active campaign"
+                        />
+                        {listingPipelineStages.length > 1 && (
+                          <Button variant="ghost" size="sm" onClick={() => removeListingStage(index)}>
                             Remove
                           </Button>
                         )}
                       </div>
+                    ))}
+                    <Button variant="secondary" size="sm" onClick={addListingStage}>
+                      Add stage
+                    </Button>
+                  </div>
 
-                      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <div className="space-y-4">
+                    <p className="text-sm font-semibold text-text-primary">Listing status set</p>
+                    {listingStatusOptions.map((row, index) => (
+                      <div key={row.clientId} className="flex items-center gap-2">
                         <Input
-                          label="Email (optional)"
-                          type="email"
-                          value={row.email}
-                          onChange={(e) => updateCrew(index, { email: e.target.value })}
+                          label={`Status ${index + 1}`}
+                          value={row.label}
+                          onChange={(e) => updateListingStatus(index, { label: e.target.value })}
+                          placeholder="e.g. Under offer"
                         />
-                        <Input
-                          label="Phone (optional)"
-                          value={row.phone}
-                          onChange={(e) => updateCrew(index, { phone: e.target.value })}
-                        />
-                        <Input
-                          label="Skills or tags"
-                          value={row.skills}
-                          onChange={(e) => updateCrew(index, { skills: e.target.value })}
-                          placeholder="e.g. crane, surveying"
-                        />
+                        {listingStatusOptions.length > 1 && (
+                          <Button variant="ghost" size="sm" onClick={() => removeListingStatus(index)}>
+                            Remove
+                          </Button>
+                        )}
                       </div>
-
-                      <Input
-                        label="Daily capacity (minutes)"
-                        inputMode="numeric"
-                        value={row.dailyCapacityMinutes}
-                        onChange={(e) => updateCrew(index, { dailyCapacityMinutes: e.target.value.replace(/[^\d]/g, '') })}
-                        placeholder="480"
-                      />
-                    </div>
-                  ))}
+                    ))}
+                    <Button variant="secondary" size="sm" onClick={addListingStatus}>
+                      Add status
+                    </Button>
+                  </div>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center justify-between gap-2">
                   <Button variant="secondary" onClick={() => setStep(3)} disabled={saving}>
                     Back
                   </Button>
-                  <div className="flex items-center gap-2">
-                    <Button variant="secondary" onClick={addCrew}>
-                      Add crew member
-                    </Button>
-                    <Button onClick={saveStep4} disabled={saving}>
-                      {saving ? 'Saving...' : 'Save and continue'}
-                    </Button>
-                  </div>
+                  <Button onClick={saveStep4} disabled={saving}>
+                    {saving ? 'Saving...' : 'Save and continue'}
+                  </Button>
                 </div>
               </div>
             )}
 
             {step === 5 && (
               <div className="space-y-6">
-                <div className="rounded-md border border-border-subtle bg-bg-section/20 p-3 text-sm text-text-secondary">
-                  Materials are optional right now. You can skip this step and add inventory later.
+                <div className="rounded-md border border-border-subtle bg-bg-section/20 p-4 space-y-3">
+                  <p className="text-sm font-semibold text-text-primary">Matching mode</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Chip active={matchingMode === 'suburb'} onClick={() => setMatchingMode('suburb')}>
+                      Suburb only
+                    </Chip>
+                    <Chip active={matchingMode === 'zone'} onClick={() => setMatchingMode('zone')}>
+                      Zone based (recommended)
+                    </Chip>
+                  </div>
                 </div>
-                <div className="space-y-4">
-                  {materials.map((row, index) => (
-                    <div key={row.id ?? `mat-${index}`} className="rounded-md border border-border-subtle bg-bg-section/20 p-4 space-y-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 w-full">
-                          <Input
-                            label="Material name"
-                            value={row.name}
-                            onChange={(e) => updateMaterial(index, { name: e.target.value })}
-                            placeholder="e.g. Sealant"
-                          />
-                          <Input
-                            label="Unit"
-                            value={row.unit}
-                            onChange={(e) => updateMaterial(index, { unit: e.target.value })}
-                            placeholder="e.g. units, m, kg"
-                          />
-                        </div>
-                        {materials.length > 1 && (
-                          <Button variant="ghost" size="sm" onClick={() => removeMaterial(index)}>
-                            Remove
-                          </Button>
-                        )}
-                      </div>
 
-                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                        <Input
-                          label="Starting stock"
-                          inputMode="numeric"
-                          value={row.startingStock}
-                          onChange={(e) => updateMaterial(index, { startingStock: e.target.value.replace(/[^\d.]/g, '') })}
-                          placeholder="0"
-                        />
-                        <Input
-                          label="Low-stock threshold"
-                          inputMode="numeric"
-                          value={row.lowStockThreshold}
-                          onChange={(e) => updateMaterial(index, { lowStockThreshold: e.target.value.replace(/[^\d.]/g, '') })}
-                          placeholder="10"
-                        />
-                      </div>
+                {matchingMode === 'zone' && (
+                  <div className="rounded-md border border-border-subtle bg-bg-section/20 p-4 space-y-4">
+                    <div>
+                      <p className="text-sm font-semibold text-text-primary">Starter zones (optional)</p>
+                      <p className="text-xs text-text-tertiary mt-1">You can skip and configure zones later.</p>
                     </div>
-                  ))}
+                    {zones.length === 0 && (
+                      <p className="text-xs text-text-tertiary">No zones added yet.</p>
+                    )}
+                    <div className="space-y-4">
+                      {zones.map((zone, index) => (
+                        <div key={zone.clientId} className="rounded-md border border-border-subtle bg-bg-section/40 p-4 space-y-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <Input
+                              label="Zone name"
+                              value={zone.name}
+                              onChange={(e) => updateZone(index, { name: e.target.value })}
+                              placeholder="e.g. Inner North"
+                            />
+                            {zones.length > 1 && (
+                              <Button variant="ghost" size="sm" onClick={() => removeZone(index)}>
+                                Remove
+                              </Button>
+                            )}
+                          </div>
+                          <div>
+                            <div className="flex gap-2">
+                              <Input
+                                label="Add suburb"
+                                value={zone.suburbInput}
+                                onChange={(e) => updateZone(index, { suburbInput: e.target.value })}
+                                placeholder="Add suburb"
+                              />
+                              <Button variant="secondary" size="sm" onClick={() => addZoneSuburb(index)}>
+                                Add
+                              </Button>
+                            </div>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {zone.suburbs.map((suburb) => (
+                                <Chip key={`${zone.clientId}-${suburb}`} active onClick={() => removeZoneSuburb(index, suburb)}>
+                                  {suburb}
+                                </Chip>
+                              ))}
+                              {zone.suburbs.length === 0 && (
+                                <span className="text-xs text-text-tertiary">No suburbs yet.</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <Button variant="secondary" size="sm" onClick={addZone}>
+                      Add zone
+                    </Button>
+                  </div>
+                )}
+
+                <div className="rounded-md border border-border-subtle bg-bg-section/20 p-4 space-y-4">
+                  <p className="text-sm font-semibold text-text-primary">Matching weights</p>
+                  <div className="space-y-4">
+                    <div>
+                      <div className="flex items-center justify-between text-sm text-text-secondary">
+                        <span>Budget</span>
+                        <span>{budgetWeight}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={budgetWeight}
+                        onChange={(e) => setBudgetWeight(Number(e.target.value))}
+                        className="w-full accent-accent-gold"
+                      />
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between text-sm text-text-secondary">
+                        <span>Location</span>
+                        <span>{locationWeight}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={locationWeight}
+                        onChange={(e) => setLocationWeight(Number(e.target.value))}
+                        className="w-full accent-accent-gold"
+                      />
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between text-sm text-text-secondary">
+                        <span>Property type</span>
+                        <span>{propertyTypeWeight}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={propertyTypeWeight}
+                        onChange={(e) => setPropertyTypeWeight(Number(e.target.value))}
+                        className="w-full accent-accent-gold"
+                      />
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between text-sm text-text-secondary">
+                        <span>Beds/Baths</span>
+                        <span>{bedsBathsWeight}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={bedsBathsWeight}
+                        onChange={(e) => setBedsBathsWeight(Number(e.target.value))}
+                        className="w-full accent-accent-gold"
+                      />
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between text-sm text-text-secondary">
+                        <span>Timeframe</span>
+                        <span>{timeframeWeight}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={timeframeWeight}
+                        onChange={(e) => setTimeframeWeight(Number(e.target.value))}
+                        className="w-full accent-accent-gold"
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <Input
+                    label="Hot match threshold"
+                    inputMode="numeric"
+                    value={hotMatchThreshold}
+                    onChange={(e) => setHotMatchThreshold(e.target.value.replace(/[^\d]/g, ''))}
+                    placeholder="85"
+                  />
+                  <Input
+                    label="Good match threshold"
+                    inputMode="numeric"
+                    value={goodMatchThreshold}
+                    onChange={(e) => setGoodMatchThreshold(e.target.value.replace(/[^\d]/g, ''))}
+                    placeholder="70"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between gap-2">
                   <Button variant="secondary" onClick={() => setStep(4)} disabled={saving}>
                     Back
                   </Button>
                   <div className="flex items-center gap-2">
-                    <Button variant="secondary" onClick={addMaterial}>
-                      Add material
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      onClick={() => {
-                        void updateOnboardingStep(6);
-                        setStep(6);
-                      }}
-                      disabled={saving}
-                    >
-                      Skip for now
-                    </Button>
+                    {matchingMode === 'zone' && (
+                      <Button
+                        variant="ghost"
+                        onClick={() => {
+                          setZones([]);
+                          void saveStep5();
+                        }}
+                        disabled={saving}
+                      >
+                        Skip zones for now
+                      </Button>
+                    )}
                     <Button onClick={saveStep5} disabled={saving}>
                       {saving ? 'Saving...' : 'Save and continue'}
                     </Button>
@@ -1486,10 +1392,50 @@ export default function OnboardingWizard() {
 
             {step === 6 && (
               <div className="space-y-6">
+                <div className="rounded-md border border-border-subtle bg-bg-section/20 p-4 space-y-4">
+                  <div>
+                    <p className="text-sm font-semibold text-text-primary">Vendor report defaults</p>
+                    <p className="text-xs text-text-tertiary mt-1">Set what should appear in every vendor report.</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Chip active={includeDemandSummary} onClick={() => setIncludeDemandSummary(!includeDemandSummary)}>
+                      Demand summary
+                    </Chip>
+                    <Chip active={includeActivitySummary} onClick={() => setIncludeActivitySummary(!includeActivitySummary)}>
+                      Activity summary
+                    </Chip>
+                    <Chip active={includeMarketOverview} onClick={() => setIncludeMarketOverview(!includeMarketOverview)}>
+                      Market overview
+                    </Chip>
+                  </div>
+                  <Textarea
+                    label="Commentary template"
+                    value={commentaryTemplate}
+                    onChange={(e) => setCommentaryTemplate(e.target.value)}
+                    rows={3}
+                  />
+                  <Select
+                    label="Default report cadence"
+                    value={reportCadence}
+                    onChange={(e) => setReportCadence(e.target.value as 'weekly' | 'fortnightly')}
+                  >
+                    <option value="weekly">Weekly</option>
+                    <option value="fortnightly">Fortnightly</option>
+                  </Select>
+                </div>
+
+                <div className="rounded-md border border-border-subtle bg-bg-section/20 p-4 space-y-3">
+                  <p className="text-sm font-semibold text-text-primary">Demo data (optional)</p>
+                  <p className="text-xs text-text-tertiary">Add one buyer and one listing so you can test matching.</p>
+                  <Chip active={createDemoData} onClick={() => setCreateDemoData(!createDemoData)}>
+                    {createDemoData ? 'Demo data will be created' : 'Create demo data'}
+                  </Chip>
+                </div>
+
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="rounded-md border border-border-subtle bg-bg-section/20 p-4">
-                    <p className="text-sm font-semibold text-text-primary">Organisation</p>
-                    <p className="mt-2 text-sm text-text-secondary">{orgName.trim() || 'Unnamed organisation'}</p>
+                    <p className="text-sm font-semibold text-text-primary">Agency</p>
+                    <p className="mt-2 text-sm text-text-secondary">{orgName.trim() || 'Unnamed agency'}</p>
                     <div className="mt-3 flex items-center gap-2 text-xs text-text-tertiary">
                       <span>Primary: {primaryColor}</span>
                       <span>Secondary: {secondaryColor || 'None'}</span>
@@ -1497,56 +1443,45 @@ export default function OnboardingWizard() {
                   </div>
 
                   <div className="rounded-md border border-border-subtle bg-bg-section/20 p-4">
-                    <p className="text-sm font-semibold text-text-primary">Work structure</p>
+                    <p className="text-sm font-semibold text-text-primary">Territory</p>
                     <p className="mt-2 text-sm text-text-secondary">
-                      {businessType.trim() || 'Business type not set'}
+                      {officeType || 'Office type not set'} | {timezone || 'Timezone'}
                     </p>
-                    <p className="mt-2 text-xs text-text-tertiary">
-                      Hours: {workdayStart} - {workdayEnd}
-                    </p>
-                    <p className="text-xs text-text-tertiary">
-                      Default job duration: {defaultJobDuration || 'n/a'} mins | Travel buffer: {defaultTravelBuffer || 'n/a'} mins
+                    <p className="text-xs text-text-tertiary mt-1">
+                      {serviceAreaSuburbs.length} suburbs | {reportCadence} cadence
                     </p>
                   </div>
 
                   <div className="rounded-md border border-border-subtle bg-bg-section/20 p-4">
-                    <p className="text-sm font-semibold text-text-primary">Job types</p>
-                    <p className="mt-2 text-sm text-text-secondary">{summaryJobTypes.length} configured</p>
+                    <p className="text-sm font-semibold text-text-primary">Buyer pipeline</p>
+                    <p className="mt-2 text-sm text-text-secondary">{summaryBuyerStages.length} stages</p>
                     <div className="mt-2 space-y-1 text-xs text-text-tertiary">
-                      {summaryJobTypes.slice(0, 4).map((row) => (
-                        <div key={row.id ?? row.label}>{row.label}</div>
+                      {summaryBuyerStages.slice(0, 4).map((row) => (
+                        <div key={row.clientId}>{row.label}</div>
                       ))}
-                      {summaryJobTypes.length > 4 && <div>+{summaryJobTypes.length - 4} more</div>}
+                      {summaryBuyerStages.length > 4 && <div>+{summaryBuyerStages.length - 4} more</div>}
                     </div>
                   </div>
 
                   <div className="rounded-md border border-border-subtle bg-bg-section/20 p-4">
-                    <p className="text-sm font-semibold text-text-primary">Crew</p>
-                    <p className="mt-2 text-sm text-text-secondary">{summaryCrews.length} members</p>
+                    <p className="text-sm font-semibold text-text-primary">Listing pipeline</p>
+                    <p className="mt-2 text-sm text-text-secondary">{summaryListingStages.length} stages</p>
                     <div className="mt-2 space-y-1 text-xs text-text-tertiary">
-                      {summaryCrews.slice(0, 4).map((row) => (
-                        <div key={row.id ?? `${row.firstName}-${row.lastName}`}>
-                          {row.firstName} {row.lastName}
-                        </div>
+                      {summaryListingStages.slice(0, 4).map((row) => (
+                        <div key={row.clientId}>{row.label}</div>
                       ))}
-                      {summaryCrews.length > 4 && <div>+{summaryCrews.length - 4} more</div>}
+                      {summaryListingStages.length > 4 && <div>+{summaryListingStages.length - 4} more</div>}
                     </div>
                   </div>
 
                   <div className="rounded-md border border-border-subtle bg-bg-section/20 p-4 md:col-span-2">
-                    <p className="text-sm font-semibold text-text-primary">Materials</p>
+                    <p className="text-sm font-semibold text-text-primary">Matching</p>
                     <p className="mt-2 text-sm text-text-secondary">
-                      {summaryMaterials.length > 0 ? `${summaryMaterials.length} items` : 'No materials added yet'}
+                      Mode: {matchingMode === 'zone' ? 'Zone based' : 'Suburb only'} | Zones: {summaryZones.length}
                     </p>
-                    {summaryMaterials.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-2 text-xs text-text-tertiary">
-                        {summaryMaterials.slice(0, 6).map((row) => (
-                          <span key={row.id ?? row.name} className="rounded-full bg-bg-section px-2 py-1">
-                            {row.name}
-                          </span>
-                        ))}
-                      </div>
-                    )}
+                    <p className="text-xs text-text-tertiary mt-1">
+                      Hot {hotMatchThreshold} | Good {goodMatchThreshold}
+                    </p>
                   </div>
                 </div>
 
@@ -1554,7 +1489,7 @@ export default function OnboardingWizard() {
                   <Button variant="secondary" onClick={() => setStep(5)} disabled={saving}>
                     Back
                   </Button>
-                  <Button onClick={finishOnboarding} disabled={saving}>
+                  <Button onClick={saveStep6} disabled={saving}>
                     {saving ? 'Finishing...' : 'Finish setup'}
                   </Button>
                 </div>
@@ -1566,4 +1501,3 @@ export default function OnboardingWizard() {
     </div>
   );
 }
-

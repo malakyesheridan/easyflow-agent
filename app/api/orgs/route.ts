@@ -6,13 +6,14 @@ import { getOrgById } from '@/lib/queries/orgs';
 import { updateOrg } from '@/lib/mutations/orgs';
 import { logAuditEvent } from '@/lib/audit/logAuditEvent';
 import { buildAuditMetadata } from '@/lib/audit/metadata';
-import { listJobTypes } from '@/lib/queries/job_types';
-import { listWorkTemplates } from '@/lib/queries/work_templates';
-import { listCrewMembers } from '@/lib/queries/crew_members';
 import { getOrgSettings } from '@/lib/queries/org_settings';
 import { upsertOrgSettings } from '@/lib/mutations/org_settings';
 import { seedCommDefaults } from '@/lib/communications/seed';
 import { withCommOrgScope } from '@/lib/communications/scope';
+import { listBuyerPipelineStages } from '@/lib/queries/buyer_pipeline_stages';
+import { listListingPipelineStages } from '@/lib/queries/listing_pipeline_stages';
+import { getMatchingConfig } from '@/lib/queries/matching_config';
+import { listReportTemplates } from '@/lib/queries/report_templates';
 
 /**
  * GET /api/orgs?orgId=...
@@ -37,37 +38,31 @@ export const PATCH = withRoute(async (req: Request) => {
   if (!canManageOrgSettings(context.data.actor)) return err('FORBIDDEN', 'Insufficient permissions');
 
   if (body?.onboardingCompleted === true) {
-    const [jobTypesResult, templatesResult, crewResult] = await Promise.all([
-      listJobTypes({ orgId: context.data.orgId, includeArchived: false }),
-      listWorkTemplates({ orgId: context.data.orgId, includeArchived: false }),
-      listCrewMembers({ orgId: context.data.orgId, activeOnly: true }),
+    const [buyerStagesResult, listingStagesResult, matchingConfigResult, reportTemplatesResult] = await Promise.all([
+      listBuyerPipelineStages({ orgId: context.data.orgId }),
+      listListingPipelineStages({ orgId: context.data.orgId }),
+      getMatchingConfig({ orgId: context.data.orgId }),
+      listReportTemplates({ orgId: context.data.orgId, templateType: 'vendor' }),
     ]);
 
-    if (!jobTypesResult.ok) return jobTypesResult;
-    if (jobTypesResult.data.length === 0) {
-      return err('VALIDATION_ERROR', 'At least one job type is required to complete onboarding.');
+    if (!buyerStagesResult.ok) return buyerStagesResult;
+    if (buyerStagesResult.data.length === 0) {
+      return err('VALIDATION_ERROR', 'At least one buyer pipeline stage is required to complete onboarding.');
     }
 
-    if (!templatesResult.ok) return templatesResult;
-    if (templatesResult.data.length === 0) {
-      return err('VALIDATION_ERROR', 'At least one work template is required to complete onboarding.');
+    if (!listingStagesResult.ok) return listingStagesResult;
+    if (listingStagesResult.data.length === 0) {
+      return err('VALIDATION_ERROR', 'At least one listing pipeline stage is required to complete onboarding.');
     }
 
-    const jobTypeIds = new Set(jobTypesResult.data.map((type) => type.id));
-    const templateJobTypeIds = new Set(
-      templatesResult.data.map((template) => template.jobTypeId).filter(Boolean) as string[]
-    );
-    const missingTemplateTypes = jobTypesResult.data.filter((type) => !templateJobTypeIds.has(type.id));
-    if (missingTemplateTypes.length > 0) {
-      return err(
-        'VALIDATION_ERROR',
-        `Missing work templates for: ${missingTemplateTypes.map((type) => type.label).join(', ')}`
-      );
+    if (!matchingConfigResult.ok) return matchingConfigResult;
+    if (!matchingConfigResult.data) {
+      return err('VALIDATION_ERROR', 'Matching configuration is required to complete onboarding.');
     }
 
-    if (!crewResult.ok) return crewResult;
-    if (crewResult.data.length === 0) {
-      return err('VALIDATION_ERROR', 'At least one active crew member is required to complete onboarding.');
+    if (!reportTemplatesResult.ok) return reportTemplatesResult;
+    if (reportTemplatesResult.data.length === 0) {
+      return err('VALIDATION_ERROR', 'At least one vendor report template is required to complete onboarding.');
     }
 
     const settingsResult = await getOrgSettings({ orgId: context.data.orgId });
