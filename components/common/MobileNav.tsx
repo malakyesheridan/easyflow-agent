@@ -8,6 +8,7 @@ import {
   CalendarDays,
   Inbox,
   KanbanSquare,
+  LayoutDashboard,
   ListChecks,
   User,
 } from 'lucide-react';
@@ -27,10 +28,11 @@ export default function MobileNav() {
   const [unreadCount, setUnreadCount] = useState<number | null>(null);
 
   const navItems: NavItem[] = [
-    { href: '/leads', label: 'Leads', icon: Inbox },
+    { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/leads', label: 'Leads (Buyers)', icon: Inbox },
     { href: '/pipeline', label: 'Pipeline', icon: KanbanSquare },
     { href: '/daily-plan', label: 'Daily Plan', icon: ListChecks },
-    { href: '/schedule', label: config?.vocabulary?.scheduleLabel ?? 'Schedule', icon: CalendarDays },
+    { href: '/schedule', label: 'Calendar', icon: CalendarDays },
     { href: '/notifications', label: config?.vocabulary?.notificationPlural ?? 'Notifications', icon: Bell },
     { href: '/profile', label: 'Profile', icon: User },
   ];

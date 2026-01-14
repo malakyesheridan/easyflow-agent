@@ -23,7 +23,7 @@ export default function Home() {
             <p className="mt-1 text-sm text-text-secondary">Prioritize follow-ups, showings, and tasks.</p>
           </a>
           <a href="/schedule" className="rounded-lg bg-bg-card p-6 shadow-soft hover:shadow-lift transition-shadow">
-            <p className="text-sm font-semibold text-text-primary">Schedule</p>
+            <p className="text-sm font-semibold text-text-primary">Calendar</p>
             <p className="mt-1 text-sm text-text-secondary">Coordinate showings, tours, and key milestones.</p>
           </a>
         </div>

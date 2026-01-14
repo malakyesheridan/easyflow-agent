@@ -28,10 +28,10 @@ export default function SidebarNav() {
 
   const adminNavItems: NavItem[] = [
     { href: '/dashboard', label: 'Dashboard' },
-    { href: '/leads', label: 'Leads' },
+    { href: '/leads', label: 'Leads (Buyers)' },
     { href: '/pipeline', label: 'Pipeline' },
     { href: '/daily-plan', label: 'Daily Plan' },
-    { href: '/schedule', label: config?.vocabulary?.scheduleLabel ?? 'Schedule' },
+    { href: '/schedule', label: 'Calendar' },
     { href: '/notifications', label: config?.vocabulary?.notificationPlural ?? 'Notifications' },
     { href: '/announcements', label: config?.vocabulary?.announcementPlural ?? 'Announcements' },
     {
@@ -48,9 +48,9 @@ export default function SidebarNav() {
 
   const crewNavItems: NavItem[] = [
     { href: '/daily-plan', label: 'Daily Plan' },
-    { href: '/leads', label: 'Leads' },
+    { href: '/leads', label: 'Leads (Buyers)' },
     { href: '/pipeline', label: 'Pipeline' },
-    { href: '/schedule', label: config?.vocabulary?.scheduleLabel ?? 'Schedule' },
+    { href: '/schedule', label: 'Calendar' },
     { href: '/profile', label: 'Profile' },
   ];
 
