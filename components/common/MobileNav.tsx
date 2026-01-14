@@ -6,11 +6,10 @@ import { useEffect, useState } from 'react';
 import {
   Bell,
   CalendarDays,
-  Inbox,
-  KanbanSquare,
+  Database,
   LayoutDashboard,
   ListChecks,
-  User,
+  Target,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useOrgConfig } from '@/hooks/useOrgConfig';
@@ -29,12 +28,11 @@ export default function MobileNav() {
 
   const navItems: NavItem[] = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/leads', label: 'Leads (Buyers)', icon: Inbox },
-    { href: '/pipeline', label: 'Pipeline', icon: KanbanSquare },
-    { href: '/daily-plan', label: 'Daily Plan', icon: ListChecks },
+    { href: '/prospecting', label: 'Prospecting', icon: Target },
+    { href: '/leads', label: 'Database', icon: Database },
+    { href: '/daily-plan', label: 'Follow-ups', icon: ListChecks },
     { href: '/schedule', label: 'Calendar', icon: CalendarDays },
     { href: '/notifications', label: config?.vocabulary?.notificationPlural ?? 'Notifications', icon: Bell },
-    { href: '/profile', label: 'Profile', icon: User },
   ];
 
   useEffect(() => {

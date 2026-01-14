@@ -1,21 +1,21 @@
 import { Card, PageContainer, PageHeader } from '@/components/ui';
 
-export default function LeadsPage() {
+export default function ReportsPage() {
   return (
     <PageContainer>
       <PageHeader
-        title="Database"
-        subtitle="Nurture your seller database and track every touchpoint."
+        title="Reports"
+        subtitle="Prepare vendor updates and campaign summaries."
       />
       <Card className="border border-dashed border-border-subtle bg-bg-section/40">
         <div className="text-center space-y-3">
-          <p className="text-sm font-semibold text-text-primary">No contacts yet</p>
+          <p className="text-sm font-semibold text-text-primary">No reports yet</p>
           <p className="text-sm text-text-secondary max-w-xl mx-auto">
-            This database will track past sellers, appraisal prospects, and long-term nurture
-            contacts so you can stay top of mind.
+            This workspace will manage vendor reporting cadence, templates, and distribution
+            history.
           </p>
           <p className="text-xs text-text-tertiary">
-            Coming next: tagging, nurture sequences, and engagement history.
+            Coming next: report scheduling, delivery tracking, and analytics.
           </p>
         </div>
       </Card>

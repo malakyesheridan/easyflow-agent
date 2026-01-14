@@ -1,21 +1,21 @@
 import { Card, PageContainer, PageHeader } from '@/components/ui';
 
-export default function LeadsPage() {
+export default function AppraisalsPage() {
   return (
     <PageContainer>
       <PageHeader
-        title="Database"
-        subtitle="Nurture your seller database and track every touchpoint."
+        title="Appraisals"
+        subtitle="Track appraisal requests, bookings, and next steps."
       />
       <Card className="border border-dashed border-border-subtle bg-bg-section/40">
         <div className="text-center space-y-3">
-          <p className="text-sm font-semibold text-text-primary">No contacts yet</p>
+          <p className="text-sm font-semibold text-text-primary">No appraisals yet</p>
           <p className="text-sm text-text-secondary max-w-xl mx-auto">
-            This database will track past sellers, appraisal prospects, and long-term nurture
-            contacts so you can stay top of mind.
+            This workspace will surface appraisal bookings, outcomes, and follow-up commitments
+            for potential sellers.
           </p>
           <p className="text-xs text-text-tertiary">
-            Coming next: tagging, nurture sequences, and engagement history.
+            Coming next: appraisal prep checklists and outcome tracking.
           </p>
         </div>
       </Card>

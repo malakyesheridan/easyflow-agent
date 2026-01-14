@@ -71,33 +71,39 @@ export default function DashboardView({ orgId }: { orgId: string }) {
   }, [resolvedOrgId]);
 
   const dashboard = data ?? EMPTY_DATA;
+  const sellerProspects = { hot: 0, warm: 0, cold: 0 };
+  const appraisalsBooked = 0;
+  const appraisalFollowUps = 0;
+  const listingsActive = dashboard.listings.total;
+  const listingsStalling = 0;
+  const reportsDue = 0;
 
   const setupItems = useMemo<SetupItem[]>(
     () => [
       {
-        label: 'Lead sources',
+        label: 'Prospecting sources',
         ready: dashboard.leadSources > 0,
-        note: 'Attribution for inbound buyer leads.',
+        note: 'Define seller lead sources for attribution.',
       },
       {
-        label: 'Buyer pipeline',
-        ready: dashboard.buyerPipelineStages > 0,
-        note: 'Stages for enquiry to settlement.',
-      },
-      {
-        label: 'Listing pipeline',
+        label: 'Listing pipeline stages',
         ready: dashboard.listingPipelineStages > 0,
-        note: 'Stages for appraisal to sold.',
-      },
-      {
-        label: 'Matching config',
-        ready: dashboard.matchingConfig.exists,
-        note: 'Weights and thresholds for matches.',
+        note: 'Appraisal to sold stage definitions.',
       },
       {
         label: 'Vendor report template',
         ready: dashboard.reportTemplates.vendorCount > 0,
-        note: 'Default cadence and report layout.',
+        note: 'Default reporting cadence and template.',
+      },
+      {
+        label: 'Matching configuration',
+        ready: dashboard.matchingConfig.exists,
+        note: 'Weights and thresholds for buyer matching.',
+      },
+      {
+        label: 'Buyer pipeline stages',
+        ready: dashboard.buyerPipelineStages > 0,
+        note: 'Secondary pipeline for buyer demand.',
       },
     ],
     [
@@ -109,17 +115,16 @@ export default function DashboardView({ orgId }: { orgId: string }) {
     ]
   );
 
-  const matchingLabel = dashboard.matchingConfig.exists ? 'Ready' : 'Not set';
-  const matchingSubtitle = dashboard.matchingConfig.exists
-    ? `Mode: ${dashboard.matchingConfig.mode ?? 'zone'}`
-    : 'Finish setup to enable matching.';
+  const reportsSubtitle = dashboard.reportTemplates.vendorCount > 0
+    ? 'Cadence template ready'
+    : 'Template not configured yet';
 
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-lg font-semibold text-text-primary">Agent overview</h2>
+        <h2 className="text-lg font-semibold text-text-primary">Seller pipeline overview</h2>
         <p className="mt-1 text-sm text-text-secondary">
-          Snapshot of buyer demand, listings, and vendor reporting health.
+          Prioritize prospecting, listing health, and vendor reporting.
         </p>
       </div>
 
@@ -136,33 +141,32 @@ export default function DashboardView({ orgId }: { orgId: string }) {
 
           <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
             <DashboardMetricCard
-              title="Active buyers"
-              value={formatCount(dashboard.buyers.total)}
-              subtitle="Leads in the buyer pipeline"
+              title="Potential sellers"
+              value={formatCount(sellerProspects.hot + sellerProspects.warm + sellerProspects.cold)}
+              subtitle={`Hot ${sellerProspects.hot} | Warm ${sellerProspects.warm} | Cold ${sellerProspects.cold}`}
+            />
+            <DashboardMetricCard
+              title="Appraisals"
+              value={formatCount(appraisalsBooked)}
+              subtitle={`Follow-ups due: ${appraisalFollowUps}`}
             />
             <DashboardMetricCard
               title="Active listings"
-              value={formatCount(dashboard.listings.total)}
-              subtitle="Vendor inventory in progress"
+              value={formatCount(listingsActive)}
+              subtitle={`Stalling: ${listingsStalling}`}
             />
             <DashboardMetricCard
-              title="Vendor reports"
-              value={formatCount(dashboard.reportTemplates.vendorCount)}
-              subtitle="Templates ready to send"
+              title="Vendor reports due"
+              value={formatCount(reportsDue)}
+              subtitle={reportsSubtitle}
               emphasis={dashboard.reportTemplates.vendorCount > 0 ? 'normal' : 'warning'}
-            />
-            <DashboardMetricCard
-              title="Matching"
-              value={matchingLabel}
-              subtitle={matchingSubtitle}
-              emphasis={dashboard.matchingConfig.exists ? 'normal' : 'warning'}
             />
           </section>
 
-          <section className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+          <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             <Card>
-              <p className="text-sm font-semibold text-text-primary">Today focus</p>
-              <p className="mt-1 text-xs text-text-tertiary">Daily plan and follow-ups for the team.</p>
+              <p className="text-sm font-semibold text-text-primary">Follow-up focus</p>
+              <p className="mt-1 text-xs text-text-tertiary">Daily touchpoints and nurture actions.</p>
               <div className="mt-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-text-secondary">Due today</span>
@@ -177,14 +181,14 @@ export default function DashboardView({ orgId }: { orgId: string }) {
                   </span>
                 </div>
                 <p className="text-xs text-text-tertiary">
-                  Connect Daily Plan tasks to surface follow-ups here.
+                  Connect follow-up tasks to surface seller outreach here.
                 </p>
               </div>
             </Card>
 
             <Card>
-              <p className="text-sm font-semibold text-text-primary">Pipeline setup status</p>
-              <p className="mt-1 text-xs text-text-tertiary">Foundations needed for buyer matching.</p>
+              <p className="text-sm font-semibold text-text-primary">Setup readiness</p>
+              <p className="mt-1 text-xs text-text-tertiary">Seller-first configuration checkpoints.</p>
               <div className="mt-4 space-y-3">
                 {setupItems.map((item) => (
                   <div key={item.label} className="flex items-start justify-between gap-3">
@@ -205,28 +209,30 @@ export default function DashboardView({ orgId }: { orgId: string }) {
                 ))}
               </div>
             </Card>
+          </section>
 
-            <Card>
-              <p className="text-sm font-semibold text-text-primary">Listing intelligence</p>
-              <p className="mt-1 text-xs text-text-tertiary">Buyer to listing matches and report activity.</p>
-              <div className="mt-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-text-secondary">Hot matches</span>
-                  <span className="text-sm font-semibold text-text-primary">
-                    {formatCount(dashboard.matches.hot)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-text-secondary">Good matches</span>
-                  <span className="text-sm font-semibold text-text-primary">
-                    {formatCount(dashboard.matches.good)}
-                  </span>
-                </div>
-                <p className="text-xs text-text-tertiary">
-                  Matching insights will populate once buyers and listings are active.
-                </p>
-              </div>
-            </Card>
+          <section className="space-y-4">
+            <div>
+              <p className="text-sm font-semibold text-text-primary">Buyer demand (secondary)</p>
+              <p className="mt-1 text-xs text-text-tertiary">Keep buyer pipeline warm to support listings.</p>
+            </div>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <DashboardMetricCard
+                title="Active buyers"
+                value={formatCount(dashboard.buyers.total)}
+                subtitle="Buyers in pipeline"
+              />
+              <DashboardMetricCard
+                title="Buyer stages"
+                value={formatCount(dashboard.buyerPipelineStages)}
+                subtitle="Pipeline stages configured"
+              />
+              <DashboardMetricCard
+                title="Buyer lead sources"
+                value={formatCount(dashboard.leadSources)}
+                subtitle="Inbound source list"
+              />
+            </div>
           </section>
         </>
       )}
