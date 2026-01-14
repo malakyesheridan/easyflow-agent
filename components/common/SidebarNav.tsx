@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import Badge from '@/components/ui/Badge';
 import { useOrgConfig } from '@/hooks/useOrgConfig';
 import { useSession } from '@/hooks/useSession';
 import useIsMobile from '@/hooks/useIsMobile';
@@ -27,20 +28,11 @@ export default function SidebarNav() {
 
   const adminNavItems: NavItem[] = [
     { href: '/dashboard', label: 'Dashboard' },
-    { href: '/operations', label: 'Operations' },
-    {
-      href: '/jobs',
-      label: config?.vocabulary?.jobPlural ?? 'Jobs',
-      subItems: [
-        { href: '/jobs', label: `Active ${config?.vocabulary?.jobPlural ?? 'Jobs'}` },
-        { href: '/jobs/unassigned', label: `Unassigned ${config?.vocabulary?.jobPlural ?? 'Jobs'}` },
-        { href: '/jobs/completed', label: `Completed ${config?.vocabulary?.jobPlural ?? 'Jobs'}` },
-        { href: '/jobs/clients', label: 'Clients' },
-      ],
-    },
+    { href: '/leads', label: 'Leads' },
+    { href: '/pipeline', label: 'Pipeline' },
+    { href: '/daily-plan', label: 'Daily Plan' },
     { href: '/schedule', label: config?.vocabulary?.scheduleLabel ?? 'Schedule' },
-    { href: '/crews', label: config?.vocabulary?.crewPlural ?? 'Crews' },
-    { href: '/warehouse', label: config?.vocabulary?.materialPlural ?? 'Materials' },
+    { href: '/notifications', label: config?.vocabulary?.notificationPlural ?? 'Notifications' },
     { href: '/announcements', label: config?.vocabulary?.announcementPlural ?? 'Announcements' },
     {
       href: '/settings',
@@ -55,9 +47,10 @@ export default function SidebarNav() {
   ];
 
   const crewNavItems: NavItem[] = [
-    { href: '/jobs/today', label: 'Today' },
-    { href: '/jobs', label: config?.vocabulary?.jobPlural ?? 'Jobs' },
-    { href: '/operations/map', label: 'Map' },
+    { href: '/daily-plan', label: 'Daily Plan' },
+    { href: '/leads', label: 'Leads' },
+    { href: '/pipeline', label: 'Pipeline' },
+    { href: '/schedule', label: config?.vocabulary?.scheduleLabel ?? 'Schedule' },
     { href: '/profile', label: 'Profile' },
   ];
 
@@ -80,9 +73,6 @@ export default function SidebarNav() {
     .join('');
 
   const isActive = (href: string) => {
-    if (href === '/operations') return pathname?.startsWith('/operations/') || pathname === '/operations';
-    if (href === '/operations/map') return pathname?.startsWith('/operations/');
-    if (href === '/jobs/today') return pathname === '/jobs/today';
     return pathname === href || pathname?.startsWith(`${href}/`);
   };
   const isParentActive = (href: string) => pathname?.startsWith(href) ?? false;
@@ -109,6 +99,12 @@ export default function SidebarNav() {
           <p className="text-xs text-text-tertiary">{isCrewSurface ? 'Profile' : 'Settings'}</p>
         </div>
       </Link>
+
+      <div className="px-2">
+        <Badge variant="gold" className="uppercase tracking-[0.18em] text-[10px]">
+          Real Estate
+        </Badge>
+      </div>
 
       <div className="rounded-xl border border-border-subtle/70 bg-gradient-to-b from-bg-card/45 via-bg-section/30 to-bg-base/30 p-2.5 shadow-lift">
         <ul className="space-y-2">

@@ -5,9 +5,10 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
   Bell,
-  CalendarCheck,
-  Briefcase,
-  Map,
+  CalendarDays,
+  Inbox,
+  KanbanSquare,
+  ListChecks,
   User,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -26,9 +27,10 @@ export default function MobileNav() {
   const [unreadCount, setUnreadCount] = useState<number | null>(null);
 
   const navItems: NavItem[] = [
-    { href: '/jobs/today', label: 'Today', icon: CalendarCheck },
-    { href: '/jobs', label: config?.vocabulary?.jobPlural ?? 'Jobs', icon: Briefcase },
-    { href: '/operations/map', label: 'Map', icon: Map },
+    { href: '/leads', label: 'Leads', icon: Inbox },
+    { href: '/pipeline', label: 'Pipeline', icon: KanbanSquare },
+    { href: '/daily-plan', label: 'Daily Plan', icon: ListChecks },
+    { href: '/schedule', label: config?.vocabulary?.scheduleLabel ?? 'Schedule', icon: CalendarDays },
     { href: '/notifications', label: config?.vocabulary?.notificationPlural ?? 'Notifications', icon: Bell },
     { href: '/profile', label: 'Profile', icon: User },
   ];

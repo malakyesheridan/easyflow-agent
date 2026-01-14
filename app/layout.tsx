@@ -7,8 +7,8 @@ import { OrgConfigProvider } from "@/hooks/useOrgConfig";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Operations",
-  description: "Operations platform",
+  title: "Agent OS (Real Estate)",
+  description: "Real estate agent operating system",
 };
 
 export default function RootLayout({

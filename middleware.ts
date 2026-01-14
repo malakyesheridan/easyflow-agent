@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import { SESSION_COOKIE_NAME } from '@/lib/auth/sessionConstants';
 
 const AUTH_FREE_PATHS = ['/login', '/signup', '/forgot-password', '/reset-password', '/onboarding', '/invite'];
+const DISABLED_TRADE_PATHS = ['/jobs', '/crews', '/crew', '/warehouse', '/invoices', '/operations', '/clients'];
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -24,6 +25,12 @@ export function middleware(req: NextRequest) {
   if (!token) {
     const url = req.nextUrl.clone();
     url.pathname = '/login';
+    return NextResponse.redirect(url);
+  }
+
+  if (DISABLED_TRADE_PATHS.some((path) => pathname.startsWith(path))) {
+    const url = req.nextUrl.clone();
+    url.pathname = '/leads';
     return NextResponse.redirect(url);
   }
 
