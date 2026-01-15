@@ -312,7 +312,8 @@ export default function ListingDetailView({ listingId }: { listingId: string }) 
         const res = await fetch(`/api/contacts?orgId=${orgId}&pageSize=200`, { cache: 'no-store' });
         const json = await res.json();
         if (!res.ok || !json.ok) throw new Error('Failed to load contacts');
-        if (!cancelled) setContacts(json.data ?? []);
+        const payload = json.data as { data?: ContactOption[] };
+        if (!cancelled) setContacts(payload.data ?? []);
       } catch {
         if (!cancelled) setContacts([]);
       }
