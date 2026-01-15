@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button, Card, Input, Select, Textarea } from '@/components/ui';
+import { Button, GlassCard, Input, SectionHeader, Select, Textarea } from '@/components/ui';
 import { useOrgConfig } from '@/hooks/useOrgConfig';
 
 const MEETING_TYPES = [
@@ -116,7 +116,11 @@ export default function AppraisalCreateView() {
   };
 
   return (
-    <Card className="space-y-4">
+    <GlassCard className="space-y-4">
+      <SectionHeader
+        title="Appointment details"
+        subtitle="Capture the vendor, timing, and meeting method."
+      />
       {error && <p className="text-sm text-destructive">{error}</p>}
       <Select
         label="Contact"
@@ -171,6 +175,6 @@ export default function AppraisalCreateView() {
           {loading ? 'Saving...' : 'Create appraisal'}
         </Button>
       </div>
-    </Card>
+    </GlassCard>
   );
 }

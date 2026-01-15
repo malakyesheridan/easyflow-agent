@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import Card from '@/components/ui/Card';
+import GlassCard from '@/components/ui/GlassCard';
+import SectionHeader from '@/components/ui/SectionHeader';
 import DashboardMetricCard from '@/components/dashboard/DashboardMetricCard';
 import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton';
 import { useOrgConfig } from '@/hooks/useOrgConfig';
@@ -121,22 +122,20 @@ export default function DashboardView({ orgId }: { orgId: string }) {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h2 className="text-lg font-semibold text-text-primary">Seller pipeline overview</h2>
-        <p className="mt-1 text-sm text-text-secondary">
-          Prioritize prospecting, listing health, and vendor reporting.
-        </p>
-      </div>
+      <SectionHeader
+        title="Seller pipeline overview"
+        subtitle="Prioritize prospecting, listing health, and vendor reporting."
+      />
 
       {loading && !data ? (
         <DashboardSkeleton />
       ) : (
         <>
           {error && (
-            <Card className="border border-red-500/20 bg-red-500/10">
+            <GlassCard className="border border-red-500/20 bg-red-500/10" padding="sm">
               <p className="text-sm font-semibold text-red-500">Dashboard data unavailable</p>
               <p className="mt-1 text-xs text-red-400">{error}</p>
-            </Card>
+            </GlassCard>
           )}
 
           <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -164,9 +163,11 @@ export default function DashboardView({ orgId }: { orgId: string }) {
           </section>
 
           <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-            <Card>
-              <p className="text-sm font-semibold text-text-primary">Follow-up focus</p>
-              <p className="mt-1 text-xs text-text-tertiary">Daily touchpoints and nurture actions.</p>
+            <GlassCard>
+              <SectionHeader
+                title="Follow-up focus"
+                subtitle="Daily touchpoints and nurture actions."
+              />
               <div className="mt-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-text-secondary">Due today</span>
@@ -184,11 +185,13 @@ export default function DashboardView({ orgId }: { orgId: string }) {
                   Connect follow-up tasks to surface seller outreach here.
                 </p>
               </div>
-            </Card>
+            </GlassCard>
 
-            <Card>
-              <p className="text-sm font-semibold text-text-primary">Setup readiness</p>
-              <p className="mt-1 text-xs text-text-tertiary">Seller-first configuration checkpoints.</p>
+            <GlassCard>
+              <SectionHeader
+                title="Setup readiness"
+                subtitle="Seller-first configuration checkpoints."
+              />
               <div className="mt-4 space-y-3">
                 {setupItems.map((item) => (
                   <div key={item.label} className="flex items-start justify-between gap-3">
@@ -208,14 +211,14 @@ export default function DashboardView({ orgId }: { orgId: string }) {
                   </div>
                 ))}
               </div>
-            </Card>
+            </GlassCard>
           </section>
 
           <section className="space-y-4">
-            <div>
-              <p className="text-sm font-semibold text-text-primary">Buyer demand (secondary)</p>
-              <p className="mt-1 text-xs text-text-tertiary">Keep buyer pipeline warm to support listings.</p>
-            </div>
+            <SectionHeader
+              title="Buyer demand (secondary)"
+              subtitle="Keep buyer pipeline warm to support listings."
+            />
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <DashboardMetricCard
                 title="Active buyers"

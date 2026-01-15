@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Badge, Button, Card, Input, Select, Textarea } from '@/components/ui';
+import { Badge, Button, Card, GlassCard, Input, MetricCard, SectionHeader, Select, Textarea } from '@/components/ui';
 import { useOrgConfig } from '@/hooks/useOrgConfig';
 
 const ROLE_OPTIONS = [
@@ -298,10 +298,10 @@ export default function ContactDetailView({ contactId }: { contactId: string }) 
 
   return (
     <div className="space-y-6">
-      <Card className="space-y-3">
+      <GlassCard className="space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-lg font-semibold text-text-primary">{contact.fullName}</p>
+            <p className="text-2xl font-semibold text-text-primary">{contact.fullName}</p>
             <div className="mt-2 flex flex-wrap gap-2">
               <Badge variant="muted">{contact.role}</Badge>
               <Badge variant="muted">{contact.sellerStage || 'No stage'}</Badge>
@@ -317,12 +317,29 @@ export default function ContactDetailView({ contactId }: { contactId: string }) 
             Owner: {contact.owner?.name || contact.owner?.email || 'Unassigned'}
           </div>
         </div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <MetricCard
+            label="Role"
+            value={contact.role}
+            helper={contact.sellerStage ? `Stage: ${contact.sellerStage}` : 'Stage not set'}
+          />
+          <MetricCard
+            label="Last touch"
+            value={formatDateTime(contact.lastTouchAt)}
+            helper="Most recent activity"
+          />
+          <MetricCard
+            label="Next follow-up"
+            value={formatDateTime(contact.nextTouchAt)}
+            helper="Schedule the next touch"
+          />
+        </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
-      </Card>
+      </GlassCard>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <Card className="space-y-4">
-          <p className="text-sm font-semibold text-text-primary">Overview</p>
+        <GlassCard className="space-y-4">
+          <SectionHeader title="Overview" />
           <div className="space-y-2 text-sm text-text-secondary">
             <p>Email: {contact.email || '-'}</p>
             <p>Phone: {contact.phone || '-'}</p>
@@ -401,10 +418,10 @@ export default function ContactDetailView({ contactId }: { contactId: string }) 
           <Button onClick={() => void saveContact()} disabled={saving}>
             {saving ? 'Saving...' : 'Save updates'}
           </Button>
-        </Card>
+        </GlassCard>
 
-        <Card className="space-y-4">
-          <p className="text-sm font-semibold text-text-primary">Follow-up</p>
+        <GlassCard className="space-y-4">
+          <SectionHeader title="Follow-up" />
           <div className="space-y-2 text-sm text-text-secondary">
             <p>Last touch: {formatDateTime(contact.lastTouchAt)}</p>
             <p>Next touch: {formatDateTime(contact.nextTouchAt)}</p>
@@ -426,10 +443,10 @@ export default function ContactDetailView({ contactId }: { contactId: string }) 
               Save date
             </Button>
           </div>
-        </Card>
+        </GlassCard>
 
-        <Card className="space-y-4">
-          <p className="text-sm font-semibold text-text-primary">Quick actions</p>
+        <GlassCard className="space-y-4">
+          <SectionHeader title="Quick actions" />
           <Textarea
             label="Add note"
             value={noteContent}
@@ -448,11 +465,11 @@ export default function ContactDetailView({ contactId }: { contactId: string }) 
           <Button variant="secondary" onClick={() => addActivity('call', callContent)}>
             Log call
           </Button>
-        </Card>
+        </GlassCard>
       </div>
 
-      <Card className="space-y-3">
-        <p className="text-sm font-semibold text-text-primary">Timeline</p>
+      <GlassCard className="space-y-3">
+        <SectionHeader title="Timeline" />
         {activities.length === 0 ? (
           <p className="text-sm text-text-secondary">No activity yet.</p>
         ) : (
@@ -470,7 +487,7 @@ export default function ContactDetailView({ contactId }: { contactId: string }) 
             ))}
           </div>
         )}
-      </Card>
+      </GlassCard>
     </div>
   );
 }

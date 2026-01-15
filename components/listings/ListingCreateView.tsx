@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button, Card, Input, Select } from '@/components/ui';
+import { Button, GlassCard, Input, SectionHeader, Select } from '@/components/ui';
 import { useOrgConfig } from '@/hooks/useOrgConfig';
 
 const STATUS_OPTIONS = [
@@ -124,7 +124,11 @@ export default function ListingCreateView() {
   };
 
   return (
-    <Card className="space-y-4">
+    <GlassCard className="space-y-4">
+      <SectionHeader
+        title="Listing details"
+        subtitle="Add the vendor, address, and campaign basics."
+      />
       {error && <p className="text-sm text-destructive">{error}</p>}
       <Select
         label="Vendor contact"
@@ -212,6 +216,6 @@ export default function ListingCreateView() {
           {loading ? 'Saving...' : 'Create listing'}
         </Button>
       </div>
-    </Card>
+    </GlassCard>
   );
 }

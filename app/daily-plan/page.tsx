@@ -1,4 +1,4 @@
-import { Card, PageContainer, PageHeader } from '@/components/ui';
+import { GlassCard, PageContainer, PageHeader } from '@/components/ui';
 
 export default function DailyPlanPage() {
   return (
@@ -7,7 +7,7 @@ export default function DailyPlanPage() {
         title="Follow-ups"
         subtitle="Prioritize seller calls, appraisal prep, and listing tasks."
       />
-      <Card className="border border-dashed border-border-subtle bg-bg-section/40">
+      <GlassCard className="border border-dashed border-border-subtle bg-bg-section/40">
         <div className="text-center space-y-3">
           <p className="text-sm font-semibold text-text-primary">Nothing scheduled yet</p>
           <p className="text-sm text-text-secondary max-w-xl mx-auto">
@@ -18,7 +18,7 @@ export default function DailyPlanPage() {
             Coming next: priority scoring, reminder cadences, and end-of-day recap.
           </p>
         </div>
-      </Card>
+      </GlassCard>
     </PageContainer>
   );
 }

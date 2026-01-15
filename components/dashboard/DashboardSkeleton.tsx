@@ -1,14 +1,14 @@
 'use client';
 
-import Card from '@/components/ui/Card';
+import GlassCard from '@/components/ui/GlassCard';
 
 function SkeletonCard() {
   return (
-    <Card className="animate-pulse">
+    <GlassCard className="animate-pulse" padding="sm">
       <div className="h-3 w-28 rounded bg-bg-section/80" />
       <div className="mt-3 h-8 w-32 rounded bg-bg-section/80" />
       <div className="mt-2 h-3 w-44 rounded bg-bg-section/80" />
-    </Card>
+    </GlassCard>
   );
 }
 

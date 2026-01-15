@@ -492,7 +492,7 @@ export default function AppraisalDetailView({ appraisalId }: { appraisalId: stri
         </div>
       </GlassCard>
 
-      <Card className="space-y-4">
+      <GlassCard className="space-y-4">
         <p className="text-sm font-semibold text-text-primary">Appointment details</p>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <Select
@@ -572,9 +572,9 @@ export default function AppraisalDetailView({ appraisalId }: { appraisalId: stri
             rows={3}
           />
         </div>
-      </Card>
+      </GlassCard>
 
-      <Card className="space-y-4">
+      <GlassCard className="space-y-4">
         <p className="text-sm font-semibold text-text-primary">Vendor profile</p>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <Input
@@ -621,9 +621,9 @@ export default function AppraisalDetailView({ appraisalId }: { appraisalId: stri
             placeholder="Price, timing, marketing"
           />
         </div>
-      </Card>
+      </GlassCard>
 
-      <Card className="space-y-4">
+      <GlassCard className="space-y-4">
         <p className="text-sm font-semibold text-text-primary">Checklist</p>
         <div className="space-y-3">
           {checklist.length === 0 ? (
@@ -695,9 +695,9 @@ export default function AppraisalDetailView({ appraisalId }: { appraisalId: stri
             <Button variant="secondary" onClick={addChecklistItem}>Add item</Button>
           </div>
         </div>
-      </Card>
+      </GlassCard>
 
-      <Card className="space-y-4">
+      <GlassCard className="space-y-4">
         <p className="text-sm font-semibold text-text-primary">Outcome</p>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <Select
@@ -756,9 +756,9 @@ export default function AppraisalDetailView({ appraisalId }: { appraisalId: stri
             </>
           )}
         </div>
-      </Card>
+      </GlassCard>
 
-      <Card className="space-y-4">
+      <GlassCard className="space-y-4">
         <div className="flex items-center justify-between">
           <p className="text-sm font-semibold text-text-primary">Follow-up actions</p>
           <Button variant="secondary" onClick={createFollowupPlan}>
@@ -787,7 +787,7 @@ export default function AppraisalDetailView({ appraisalId }: { appraisalId: stri
             ))}
           </div>
         )}
-      </Card>
+      </GlassCard>
 
       <div className="flex justify-end">
         <Button onClick={saveAppraisal} disabled={saving}>

@@ -1,7 +1,9 @@
 'use client';
 
 import { useMemo } from 'react';
-import Card from '@/components/ui/Card';
+import GlassCard from '@/components/ui/GlassCard';
+import MetricCard from '@/components/ui/MetricCard';
+import SectionHeader from '@/components/ui/SectionHeader';
 import { useOrgConfig } from '@/hooks/useOrgConfig';
 
 function addDays(date: Date, days: number): Date {
@@ -60,20 +62,26 @@ export default function ScheduleView({ orgId }: { orgId: string }) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold text-text-primary">Calendar and daily plan</h2>
-        <p className="mt-1 text-sm text-text-secondary">
-          Schedule follow-ups, inspections, and vendor updates. Timezone: {timezoneLabel}.
-        </p>
+      <SectionHeader
+        title="Calendar and daily plan"
+        subtitle={`Schedule follow-ups, inspections, and vendor updates. Timezone: ${timezoneLabel}.`}
+      />
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        {groups.map((group) => (
+          <MetricCard
+            key={`${group.id}-summary`}
+            label={group.label}
+            value={group.items.length}
+            helper={group.rangeLabel}
+          />
+        ))}
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
+        <GlassCard className="lg:col-span-2">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-semibold text-text-primary">Daily plan</p>
-              <p className="mt-1 text-xs text-text-tertiary">Tasks grouped by day.</p>
-            </div>
+            <SectionHeader title="Daily plan" subtitle="Tasks grouped by day." />
             {!resolvedOrgId && (
               <span className="text-xs text-amber-500">Org not selected</span>
             )}
@@ -102,11 +110,10 @@ export default function ScheduleView({ orgId }: { orgId: string }) {
               </div>
             ))}
           </div>
-        </Card>
+        </GlassCard>
 
-        <Card>
-          <p className="text-sm font-semibold text-text-primary">Opens and inspections</p>
-          <p className="mt-1 text-xs text-text-tertiary">Upcoming event placeholders.</p>
+        <GlassCard>
+          <SectionHeader title="Opens and inspections" subtitle="Upcoming event placeholders." />
           <div className="mt-4 space-y-3">
             <div className="rounded-md border border-dashed border-border-subtle p-3">
               <p className="text-sm text-text-secondary">No opens scheduled yet.</p>
@@ -115,18 +122,17 @@ export default function ScheduleView({ orgId }: { orgId: string }) {
               <p className="text-sm text-text-secondary">No inspections scheduled yet.</p>
             </div>
           </div>
-        </Card>
+        </GlassCard>
       </div>
 
-      <Card>
-        <p className="text-sm font-semibold text-text-primary">Pipeline reminders</p>
-        <p className="mt-1 text-xs text-text-tertiary">Key milestones and vendor reporting dates.</p>
+      <GlassCard>
+        <SectionHeader title="Pipeline reminders" subtitle="Key milestones and vendor reporting dates." />
         <div className="mt-4 rounded-md border border-dashed border-border-subtle p-3">
           <p className="text-sm text-text-secondary">
             Reminders will appear once listing milestones and report cadences are configured.
           </p>
         </div>
-      </Card>
+      </GlassCard>
     </div>
   );
 }

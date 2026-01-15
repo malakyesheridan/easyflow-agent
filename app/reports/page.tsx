@@ -1,4 +1,4 @@
-import { Card, PageContainer, PageHeader } from '@/components/ui';
+import { GlassCard, PageContainer, PageHeader } from '@/components/ui';
 
 export default function ReportsPage() {
   return (
@@ -7,7 +7,7 @@ export default function ReportsPage() {
         title="Reports"
         subtitle="Prepare vendor updates and campaign summaries."
       />
-      <Card className="border border-dashed border-border-subtle bg-bg-section/40">
+      <GlassCard className="border border-dashed border-border-subtle bg-bg-section/40">
         <div className="text-center space-y-3">
           <p className="text-sm font-semibold text-text-primary">No reports yet</p>
           <p className="text-sm text-text-secondary max-w-xl mx-auto">
@@ -18,7 +18,7 @@ export default function ReportsPage() {
             Coming next: report scheduling, delivery tracking, and analytics.
           </p>
         </div>
-      </Card>
+      </GlassCard>
     </PageContainer>
   );
 }

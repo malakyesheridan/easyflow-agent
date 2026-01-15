@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { Badge, Button, Card, Chip, GlassCard, Input, PageHeader, SectionHeader, Select } from '@/components/ui';
+import { Badge, Button, Chip, GlassCard, Input, MetricCard, PageHeader, SectionHeader, Select } from '@/components/ui';
 import { useOrgConfig } from '@/hooks/useOrgConfig';
 import { cn } from '@/lib/utils';
 
@@ -64,6 +64,14 @@ function isOverdue(value: string | null) {
   return date.getTime() < new Date().setHours(0, 0, 0, 0);
 }
 
+function isDueToday(value: string | null) {
+  if (!value) return false;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+  const today = new Date();
+  return date.toDateString() === today.toDateString();
+}
+
 export default function ContactsView() {
   const { config } = useOrgConfig();
   const orgId = config?.orgId ?? '';
@@ -109,6 +117,12 @@ export default function ContactsView() {
     ownerUserId: '',
     leadSource: '',
   });
+
+  const summary = useMemo(() => {
+    const overdue = contacts.filter((contact) => isOverdue(contact.nextTouchAt)).length;
+    const dueTodayCount = contacts.filter((contact) => isDueToday(contact.nextTouchAt)).length;
+    return { overdue, dueTodayCount };
+  }, [contacts]);
 
   useEffect(() => {
     const id = setTimeout(() => setSearch(searchInput.trim()), 250);
@@ -354,8 +368,26 @@ export default function ContactsView() {
         }
       />
 
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <MetricCard
+          label="Total contacts"
+          value={total}
+          helper="Across the database"
+        />
+        <MetricCard
+          label="Due today"
+          value={summary.dueTodayCount}
+          helper="Visible in this view"
+        />
+        <MetricCard
+          label="Overdue"
+          value={summary.overdue}
+          helper="Visible in this view"
+        />
+      </div>
+
       {showCreate && (
-        <Card className="space-y-4">
+        <GlassCard className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-semibold text-text-primary">New contact</p>
@@ -438,7 +470,7 @@ export default function ContactsView() {
               {createLoading ? 'Saving...' : 'Save contact'}
             </Button>
           </div>
-        </Card>
+        </GlassCard>
       )}
 
       <GlassCard className="space-y-4">
@@ -538,7 +570,7 @@ export default function ContactsView() {
       </GlassCard>
 
       {selectedIds.size > 0 && (
-        <Card className="space-y-3 border border-border-subtle bg-bg-section/40">
+        <GlassCard className="space-y-3 border border-border-subtle bg-bg-section/40">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-text-secondary">{selectedIds.size} contacts selected</p>
             {bulkMessage && <p className="text-xs text-text-tertiary">{bulkMessage}</p>}
@@ -615,7 +647,7 @@ export default function ContactsView() {
               Set follow-up
             </Button>
           </div>
-        </Card>
+        </GlassCard>
       )}
 
       <GlassCard className="overflow-hidden" padding="none">

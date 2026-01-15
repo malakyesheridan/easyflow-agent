@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { Badge, Button, GlassCard, Input, PageHeader, SectionHeader, Select } from '@/components/ui';
+import { Badge, Button, GlassCard, Input, MetricCard, PageHeader, SectionHeader, Select } from '@/components/ui';
 import InfoTooltip from '@/components/ui/InfoTooltip';
 import ScoreBreakdownTooltip from '@/components/ui/ScoreBreakdownTooltip';
 import { useOrgConfig } from '@/hooks/useOrgConfig';
@@ -82,6 +82,13 @@ export default function ListingsView() {
   const [suburb, setSuburb] = useState('');
 
   const [owners, setOwners] = useState<Owner[]>([]);
+
+  const summary = useMemo(() => {
+    const activeCount = rows.filter((row) => row.status === 'active').length;
+    const underOfferCount = rows.filter((row) => row.status === 'under_offer').length;
+    const overdueUpdates = rows.filter((row) => row.vendorUpdateOverdue).length;
+    return { activeCount, underOfferCount, overdueUpdates };
+  }, [rows]);
 
   useEffect(() => {
     const id = setTimeout(() => setSearch(searchInput.trim()), 250);
@@ -177,6 +184,29 @@ export default function ListingsView() {
           </Link>
         )}
       />
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+        <MetricCard
+          label="Total listings"
+          value={total}
+          helper="Across the pipeline"
+        />
+        <MetricCard
+          label="Active"
+          value={summary.activeCount}
+          helper="Visible in this view"
+        />
+        <MetricCard
+          label="Under offer"
+          value={summary.underOfferCount}
+          helper="Visible in this view"
+        />
+        <MetricCard
+          label="Updates overdue"
+          value={summary.overdueUpdates}
+          helper="Visible in this view"
+        />
+      </div>
 
       <GlassCard className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, type ChangeEvent } from 'react';
-import { Button, Card, Input, Select } from '@/components/ui';
+import { Button, GlassCard, Input, Select } from '@/components/ui';
 import InfoTooltip from '@/components/ui/InfoTooltip';
 import { useOrgConfig } from '@/hooks/useOrgConfig';
 import { useSession } from '@/hooks/useSession';
@@ -181,7 +181,7 @@ export default function ContactsImportWizard() {
 
   return (
     <div className="space-y-4">
-      <Card className="space-y-2">
+      <GlassCard className="space-y-2">
         <p className="text-xs uppercase tracking-[0.2em] text-text-tertiary">Step {step} of {STEP_LABELS.length}</p>
         <p className="text-lg font-semibold text-text-primary">{STEP_LABELS[step - 1]}</p>
         <p className="text-sm text-text-secondary">
@@ -196,10 +196,10 @@ export default function ContactsImportWizard() {
           </p>
         )}
         {error && <p className="text-sm text-destructive">{error}</p>}
-      </Card>
+      </GlassCard>
 
       {step === 1 && (
-        <Card className="space-y-4">
+        <GlassCard className="space-y-4">
           <div className="space-y-2">
             <p className="text-sm font-semibold text-text-primary">Upload CSV</p>
             <p className="text-sm text-text-secondary">CSV must include header row.</p>
@@ -220,11 +220,11 @@ export default function ContactsImportWizard() {
               {loading ? 'Previewing...' : 'Preview and map'}
             </Button>
           </div>
-        </Card>
+        </GlassCard>
       )}
 
       {step === 2 && preview && (
-        <Card className="space-y-4">
+        <GlassCard className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-semibold text-text-primary">Preview</p>
@@ -297,11 +297,11 @@ export default function ContactsImportWizard() {
               Continue
             </Button>
           </div>
-        </Card>
+        </GlassCard>
       )}
 
       {step === 3 && (
-        <Card className="space-y-4">
+        <GlassCard className="space-y-4">
           <div className="space-y-2">
             <p className="text-sm font-semibold text-text-primary">Validation rules</p>
             <ul className="text-sm text-text-secondary list-disc pl-5 space-y-1">
@@ -330,11 +330,11 @@ export default function ContactsImportWizard() {
               Continue
             </Button>
           </div>
-        </Card>
+        </GlassCard>
       )}
 
       {step === 4 && (
-        <Card className="space-y-4">
+        <GlassCard className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold text-text-primary">Run import</p>
             <Button variant="ghost" size="sm" onClick={() => setStep(3)}>
@@ -357,19 +357,19 @@ export default function ContactsImportWizard() {
             <div className="space-y-3">
               <p className="text-sm text-text-secondary">Import complete.</p>
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="rounded-md border border-border-subtle p-3">
+                <div className="rounded-md border border-border-subtle bg-bg-section/30 p-3">
                   <p className="text-xs text-text-tertiary">Created</p>
                   <p className="text-lg font-semibold text-text-primary">{summary.created}</p>
                 </div>
-                <div className="rounded-md border border-border-subtle p-3">
+                <div className="rounded-md border border-border-subtle bg-bg-section/30 p-3">
                   <p className="text-xs text-text-tertiary">Updated</p>
                   <p className="text-lg font-semibold text-text-primary">{summary.updated}</p>
                 </div>
-                <div className="rounded-md border border-border-subtle p-3">
+                <div className="rounded-md border border-border-subtle bg-bg-section/30 p-3">
                   <p className="text-xs text-text-tertiary">Skipped</p>
                   <p className="text-lg font-semibold text-text-primary">{summary.skipped}</p>
                 </div>
-                <div className="rounded-md border border-border-subtle p-3">
+                <div className="rounded-md border border-border-subtle bg-bg-section/30 p-3">
                   <p className="text-xs text-text-tertiary">Failed</p>
                   <p className="text-lg font-semibold text-text-primary">{summary.failed}</p>
                 </div>
@@ -381,7 +381,7 @@ export default function ContactsImportWizard() {
               )}
             </div>
           )}
-        </Card>
+        </GlassCard>
       )}
     </div>
   );

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { Badge, Button, Chip, GlassCard, PageHeader, SectionHeader, Select, Input } from '@/components/ui';
+import { Badge, Button, Chip, GlassCard, MetricCard, PageHeader, SectionHeader, Select, Input } from '@/components/ui';
 import InfoTooltip from '@/components/ui/InfoTooltip';
 import ScoreBreakdownTooltip from '@/components/ui/ScoreBreakdownTooltip';
 import { useOrgConfig } from '@/hooks/useOrgConfig';
@@ -189,6 +189,13 @@ export default function AppraisalsView() {
     return map;
   }, [rows]);
 
+  const summary = useMemo(() => {
+    const totalLoaded = rows.length;
+    const overdueCount = rows.filter((row) => row.overdue).length;
+    const hotCount = rows.filter((row) => (row.winProbabilityScore ?? 0) >= 75).length;
+    return { totalLoaded, overdueCount, hotCount };
+  }, [rows]);
+
   const clearFilters = () => {
     setSearchInput('');
     setSearch('');
@@ -209,6 +216,24 @@ export default function AppraisalsView() {
           </Link>
         }
       />
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <MetricCard
+          label="Total appraisals"
+          value={total}
+          helper="Across the pipeline"
+        />
+        <MetricCard
+          label="Hot prospects"
+          value={summary.hotCount}
+          helper="Visible in this view"
+        />
+        <MetricCard
+          label="Overdue actions"
+          value={summary.overdueCount}
+          helper="Visible in this view"
+        />
+      </div>
 
       <GlassCard className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
