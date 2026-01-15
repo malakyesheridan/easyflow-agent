@@ -63,7 +63,7 @@ export const POST = withRoute(async (req: Request) => {
         suburb: 'Fremantle',
         state: 'WA',
         postcode: '6160',
-        status: 'Active',
+        status: 'active',
         priceGuide: '$900k - $950k',
         isDemo: true,
         updatedAt: new Date(),
