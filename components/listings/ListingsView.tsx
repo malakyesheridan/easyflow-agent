@@ -2,7 +2,9 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { Badge, Button, Card, Input, PageHeader, Select } from '@/components/ui';
+import { Badge, Button, GlassCard, Input, PageHeader, SectionHeader, Select } from '@/components/ui';
+import InfoTooltip from '@/components/ui/InfoTooltip';
+import ScoreBreakdownTooltip from '@/components/ui/ScoreBreakdownTooltip';
 import { useOrgConfig } from '@/hooks/useOrgConfig';
 import { cn } from '@/lib/utils';
 
@@ -15,6 +17,7 @@ type ListingRow = {
   status: string;
   daysOnMarket: number;
   campaignHealthScore: number;
+  campaignHealthReasons: string[];
   healthBand: 'healthy' | 'watch' | 'stalling';
   nextMilestoneDue: string | null;
   vendorUpdateLastSent: string | null;
@@ -175,7 +178,7 @@ export default function ListingsView() {
         )}
       />
 
-      <Card className="space-y-4">
+      <GlassCard className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div />
           <Button variant="ghost" size="sm" onClick={clearFilters}>
@@ -218,15 +221,15 @@ export default function ListingsView() {
             ))}
           </Select>
         </div>
-      </Card>
+      </GlassCard>
 
-      <Card className="overflow-hidden">
-        <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
-          <div>
-            <p className="text-sm font-semibold text-text-primary">Listings</p>
-            <p className="text-xs text-text-tertiary">{total} listings</p>
-          </div>
-          {error && <p className="text-xs text-destructive">{error}</p>}
+      <GlassCard className="overflow-hidden" padding="none">
+        <div className="border-b border-border-subtle px-4 py-3">
+          <SectionHeader
+            title="Listings"
+            subtitle={`${total} listings`}
+            actions={error ? <p className="text-xs text-destructive">{error}</p> : undefined}
+          />
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -237,7 +240,15 @@ export default function ListingsView() {
                 <th className="px-4 py-3 text-left">Days on market</th>
                 <th className="px-4 py-3 text-left">Health</th>
                 <th className="px-4 py-3 text-left">Next milestone</th>
-                <th className="px-4 py-3 text-left">Vendor update</th>
+                <th className="px-4 py-3 text-left">
+                  <span className="inline-flex items-center gap-1">
+                    Vendor update
+                    <InfoTooltip
+                      label="Vendor update cadence"
+                      content={<p className="text-xs text-text-secondary">Listings should receive a vendor update at least every 7 days. Overdue listings lose momentum.</p>}
+                    />
+                  </span>
+                </th>
                 <th className="px-4 py-3 text-left">Enq / Opens / Offers</th>
               </tr>
             </thead>
@@ -271,6 +282,17 @@ export default function ListingsView() {
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-semibold text-text-primary">{row.campaignHealthScore ?? 0}</span>
                           <Badge variant={band.variant}>{band.label}</Badge>
+                          <ScoreBreakdownTooltip
+                            label={`Campaign health details for ${row.address || 'listing'}`}
+                            meaning="Tracks campaign momentum based on milestones, activity, and vendor updates."
+                            bullets={[
+                              'Checklist and milestones progress lift health.',
+                              'Recent enquiries and inspections add momentum.',
+                              'Overdue vendor updates or milestones reduce health.',
+                            ]}
+                            reasons={row.campaignHealthReasons}
+                            bands="Healthy is 70+, Watch is 40-69, Stalling is below 40."
+                          />
                         </div>
                       </td>
                       <td className="px-4 py-3">{formatDate(row.nextMilestoneDue)}</td>
@@ -308,7 +330,7 @@ export default function ListingsView() {
             </Button>
           </div>
         </div>
-      </Card>
+      </GlassCard>
     </div>
   );
 }

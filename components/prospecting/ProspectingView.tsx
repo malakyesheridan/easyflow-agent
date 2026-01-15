@@ -2,7 +2,9 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { Badge, Button, Card, Chip, Input, PageHeader, Select } from '@/components/ui';
+import { Badge, Button, Chip, GlassCard, MetricCard, PageHeader, SectionHeader, Select, Input } from '@/components/ui';
+import InfoTooltip from '@/components/ui/InfoTooltip';
+import ScoreBreakdownTooltip from '@/components/ui/ScoreBreakdownTooltip';
 import { useOrgConfig } from '@/hooks/useOrgConfig';
 import { cn } from '@/lib/utils';
 
@@ -53,8 +55,8 @@ const BAND_STYLES: Record<string, { label: string; variant: 'gold' | 'default' |
 };
 
 const SAVED_VIEWS = [
-  { key: 'overdue', label: 'Overdue follow-ups' },
-  { key: 'hot', label: 'Hot potential sellers' },
+  { key: 'overdue', label: 'Overdue follow-ups', tooltip: 'Shows contacts with next touch dates before today.' },
+  { key: 'hot', label: 'Hot potential sellers', tooltip: 'Filters to high intent sellers based on intent score.' },
   { key: 'past', label: 'Past clients reactivation' },
   { key: 'warm', label: 'Warm nurture (next 7 days)' },
 ];
@@ -93,6 +95,9 @@ export default function ProspectingView() {
   const [dueToday, setDueToday] = useState(false);
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [dueWithinDays, setDueWithinDays] = useState<number | null>(null);
+
+  const [summary, setSummary] = useState({ hot: 0, warm: 0, cold: 0, overdue: 0 });
+  const [summaryLoading, setSummaryLoading] = useState(false);
 
   const [owners, setOwners] = useState<Owner[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -144,7 +149,7 @@ export default function ProspectingView() {
     };
   }, [orgId]);
 
-  const queryString = useMemo(() => {
+  const baseParams = useMemo(() => {
     const params = new URLSearchParams();
     if (!orgId) return params.toString();
     params.set('orgId', orgId);
@@ -153,6 +158,11 @@ export default function ProspectingView() {
     if (role) params.set('role', role);
     if (sellerStage) params.set('sellerStage', sellerStage);
     if (tagFilter) params.append('tag', tagFilter);
+    return params.toString();
+  }, [orgId, search, ownerId, role, sellerStage, tagFilter]);
+
+  const queryString = useMemo(() => {
+    const params = new URLSearchParams(baseParams);
     if (band) params.set('band', band);
     if (dueToday) params.set('dueToday', 'true');
     if (overdueOnly) params.set('overdue', 'true');
@@ -160,7 +170,15 @@ export default function ProspectingView() {
     params.set('page', String(page));
     params.set('pageSize', '50');
     return params.toString();
-  }, [orgId, search, ownerId, role, sellerStage, tagFilter, band, dueToday, overdueOnly, dueWithinDays, page]);
+  }, [baseParams, band, dueToday, overdueOnly, dueWithinDays, page]);
+
+  const summaryParams = useMemo(() => {
+    const params = new URLSearchParams(baseParams);
+    if (dueToday) params.set('dueToday', 'true');
+    if (overdueOnly) params.set('overdue', 'true');
+    if (dueWithinDays) params.set('dueWithinDays', String(dueWithinDays));
+    return params.toString();
+  }, [baseParams, dueToday, overdueOnly, dueWithinDays]);
 
   useEffect(() => {
     if (!orgId) return;
@@ -193,6 +211,44 @@ export default function ProspectingView() {
       cancelled = true;
     };
   }, [orgId, queryString]);
+
+  useEffect(() => {
+    if (!orgId) return;
+    let cancelled = false;
+
+    const fetchCount = async (extras: Record<string, string>) => {
+      const params = new URLSearchParams(summaryParams);
+      Object.entries(extras).forEach(([key, value]) => params.set(key, value));
+      params.set('page', '1');
+      params.set('pageSize', '1');
+      const res = await fetch(`/api/prospecting/queue?${params.toString()}`, { cache: 'no-store' });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error('Failed to load summary');
+      return (json.data?.total as number) ?? 0;
+    };
+
+    const loadSummary = async () => {
+      try {
+        setSummaryLoading(true);
+        const [hot, warm, cold, overdue] = await Promise.all([
+          fetchCount({ band: 'hot' }),
+          fetchCount({ band: 'warm' }),
+          fetchCount({ band: 'cold' }),
+          fetchCount({ overdue: 'true' }),
+        ]);
+        if (!cancelled) setSummary({ hot, warm, cold, overdue });
+      } catch {
+        if (!cancelled) setSummary({ hot: 0, warm: 0, cold: 0, overdue: 0 });
+      } finally {
+        if (!cancelled) setSummaryLoading(false);
+      }
+    };
+
+    void loadSummary();
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId, summaryParams]);
 
   const applySavedView = (key: string) => {
     setPage(1);
@@ -246,13 +302,44 @@ export default function ProspectingView() {
         }
       />
 
-      <Card className="space-y-4">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          label="Hot"
+          value={summaryLoading ? '-' : summary.hot}
+          helper="Intent score 80+"
+        />
+        <MetricCard
+          label="Warm"
+          value={summaryLoading ? '-' : summary.warm}
+          helper="Intent score 50-79"
+        />
+        <MetricCard
+          label="Cold"
+          value={summaryLoading ? '-' : summary.cold}
+          helper="Intent score below 50"
+        />
+        <MetricCard
+          label="Overdue"
+          value={summaryLoading ? '-' : summary.overdue}
+          helper="Next touch before today"
+        />
+      </div>
+
+      <GlassCard className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-2">
             {SAVED_VIEWS.map((view) => (
-              <Chip key={view.key} onClick={() => applySavedView(view.key)}>
-                {view.label}
-              </Chip>
+              <div key={view.key} className="flex items-center gap-1">
+                <Chip onClick={() => applySavedView(view.key)}>
+                  {view.label}
+                </Chip>
+                {view.tooltip && (
+                  <InfoTooltip
+                    label={`${view.label} info`}
+                    content={<p className="text-xs text-text-secondary">{view.tooltip}</p>}
+                  />
+                )}
+              </div>
             ))}
           </div>
           <Button variant="ghost" size="sm" onClick={clearFilters}>
@@ -318,19 +405,25 @@ export default function ProspectingView() {
                 checked={overdueOnly}
                 onChange={(event) => setOverdueOnly(event.target.checked)}
               />
-              Overdue
+              <span className="inline-flex items-center gap-1">
+                Overdue
+                <InfoTooltip
+                  label="Overdue follow-ups info"
+                  content={<p className="text-xs text-text-secondary">Shows contacts with next touch dates before today.</p>}
+                />
+              </span>
             </label>
           </div>
         </div>
-      </Card>
+      </GlassCard>
 
-      <Card className="overflow-hidden">
-        <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
-          <div>
-            <p className="text-sm font-semibold text-text-primary">Prospecting queue</p>
-            <p className="text-xs text-text-tertiary">{total} contacts</p>
-          </div>
-          {error && <p className="text-xs text-destructive">{error}</p>}
+      <GlassCard className="overflow-hidden" padding="none">
+        <div className="border-b border-border-subtle px-4 py-3">
+          <SectionHeader
+            title="Prospecting queue"
+            subtitle={`${total} contacts`}
+            actions={error ? <p className="text-xs text-destructive">{error}</p> : undefined}
+          />
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -377,6 +470,17 @@ export default function ProspectingView() {
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-semibold text-text-primary">{contact.score}</span>
                           <Badge variant={bandStyle.variant}>{bandStyle.label}</Badge>
+                          <ScoreBreakdownTooltip
+                            label={`Seller intent score details for ${contact.fullName}`}
+                            meaning="Ranks the likelihood a seller will list soon based on engagement and intent signals."
+                            bullets={[
+                              'Overdue follow-ups and recent engagement lift the score.',
+                              'Seller role, stage, and temperature add momentum.',
+                              'High-intent tags and consistent touches add boosts.',
+                            ]}
+                            reasons={contact.reasons}
+                            bands="Hot is 80+, Warm is 50-79, Cold is below 50."
+                          />
                         </div>
                       </td>
                       <td className="px-4 py-3">
@@ -436,7 +540,7 @@ export default function ProspectingView() {
             </Button>
           </div>
         </div>
-      </Card>
+      </GlassCard>
     </div>
   );
 }

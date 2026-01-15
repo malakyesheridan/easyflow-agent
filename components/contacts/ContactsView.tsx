@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { Badge, Button, Card, Chip, Input, PageHeader, Select } from '@/components/ui';
+import { Badge, Button, Card, Chip, GlassCard, Input, PageHeader, SectionHeader, Select } from '@/components/ui';
 import { useOrgConfig } from '@/hooks/useOrgConfig';
 import { cn } from '@/lib/utils';
 
@@ -344,7 +344,7 @@ export default function ContactsView() {
         subtitle="Nurture your seller database and track every touchpoint."
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" onClick={() => setShowCreate((prev) => !prev)}>
+            <Button onClick={() => setShowCreate((prev) => !prev)}>
               Add contact
             </Button>
             <Link href="/contacts/import">
@@ -441,7 +441,7 @@ export default function ContactsView() {
         </Card>
       )}
 
-      <Card className="space-y-4">
+      <GlassCard className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-2">
             {SAVED_VIEWS.map((view) => (
@@ -535,7 +535,7 @@ export default function ContactsView() {
             ))}
           </Select>
         </div>
-      </Card>
+      </GlassCard>
 
       {selectedIds.size > 0 && (
         <Card className="space-y-3 border border-border-subtle bg-bg-section/40">
@@ -618,13 +618,13 @@ export default function ContactsView() {
         </Card>
       )}
 
-      <Card className="overflow-hidden">
-        <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
-          <div>
-            <p className="text-sm font-semibold text-text-primary">Contacts</p>
-            <p className="text-xs text-text-tertiary">{total} contacts</p>
-          </div>
-          {error && <p className="text-xs text-destructive">{error}</p>}
+      <GlassCard className="overflow-hidden" padding="none">
+        <div className="border-b border-border-subtle px-4 py-3">
+          <SectionHeader
+            title="Contacts"
+            subtitle={`${total} contacts`}
+            actions={error ? <p className="text-xs text-destructive">{error}</p> : undefined}
+          />
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -734,7 +734,7 @@ export default function ContactsView() {
             </Button>
           </div>
         </div>
-      </Card>
+      </GlassCard>
     </div>
   );
 }

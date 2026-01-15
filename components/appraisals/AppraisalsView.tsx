@@ -2,7 +2,9 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { Badge, Button, Card, Chip, Input, PageHeader, Select } from '@/components/ui';
+import { Badge, Button, Chip, GlassCard, PageHeader, SectionHeader, Select, Input } from '@/components/ui';
+import InfoTooltip from '@/components/ui/InfoTooltip';
+import ScoreBreakdownTooltip from '@/components/ui/ScoreBreakdownTooltip';
 import { useOrgConfig } from '@/hooks/useOrgConfig';
 import { cn } from '@/lib/utils';
 
@@ -46,6 +48,16 @@ const STAGES: Stage[] = [
   { key: 'won', label: 'Won' },
   { key: 'lost', label: 'Lost' },
 ];
+
+const STAGE_DESCRIPTIONS: Record<string, string> = {
+  booked: 'Appointment booked with the vendor.',
+  confirmed: 'Appointment confirmed with decision makers.',
+  prepped: 'Prep tasks in progress or completed.',
+  attended: 'Appraisal meeting completed.',
+  followup_sent: 'Follow-up plan or update sent.',
+  won: 'Listing secured.',
+  lost: 'Listing lost to another agent or delayed.',
+};
 
 const SORT_OPTIONS = [
   { value: 'appointment_at_asc', label: 'Appointment time (soonest)' },
@@ -192,6 +204,14 @@ export default function AppraisalsView() {
         title="Appraisals"
         subtitle="Track appraisal bookings, prep, and outcomes."
         actions={
+          <Link href="/appraisals/new">
+            <Button variant="secondary">New appraisal</Button>
+          </Link>
+        }
+      />
+
+      <GlassCard className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-2">
             <Chip active={view === 'board'} onClick={() => setView('board')}>
               Board view
@@ -199,16 +219,7 @@ export default function AppraisalsView() {
             <Chip active={view === 'list'} onClick={() => setView('list')}>
               List view
             </Chip>
-            <Link href="/appraisals/new">
-              <Button variant="secondary">New appraisal</Button>
-            </Link>
           </div>
-        }
-      />
-
-      <Card className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div />
           <Button variant="ghost" size="sm" onClick={clearFilters}>
             Reset filters
           </Button>
@@ -229,7 +240,25 @@ export default function AppraisalsView() {
               </option>
             ))}
           </Select>
-          <Select label="Stage" value={stageFilter} onChange={(event) => setStageFilter(event.target.value)}>
+          <Select
+            label={(
+              <span className="inline-flex items-center gap-1">
+                Stage
+                <InfoTooltip
+                  label="Appraisal stage definitions"
+                  content={(
+                    <ul className="list-disc space-y-1 pl-4 text-xs text-text-secondary">
+                      {STAGES.map((stage) => (
+                        <li key={stage.key}>{stage.label}: {STAGE_DESCRIPTIONS[stage.key]}</li>
+                      ))}
+                    </ul>
+                  )}
+                />
+              </span>
+            )}
+            value={stageFilter}
+            onChange={(event) => setStageFilter(event.target.value)}
+          >
             <option value="">All stages</option>
             {STAGES.map((stage) => (
               <option key={stage.key} value={stage.key}>
@@ -247,18 +276,16 @@ export default function AppraisalsView() {
             </Select>
           )}
         </div>
-      </Card>
+      </GlassCard>
 
       {view === 'board' ? (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
           {STAGES.map((stage) => (
-            <Card key={stage.key} className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-text-primary">{stage.label}</p>
-                  <p className="text-xs text-text-tertiary">{grouped.get(stage.key)?.length ?? 0} appraisals</p>
-                </div>
-              </div>
+            <GlassCard key={stage.key} className="space-y-3">
+              <SectionHeader
+                title={stage.label}
+                subtitle={`${grouped.get(stage.key)?.length ?? 0} appraisals`}
+              />
               <div className="space-y-3">
                 {loading ? (
                   <p className="text-xs text-text-tertiary">Loading...</p>
@@ -269,7 +296,7 @@ export default function AppraisalsView() {
                     const band = getBand(row.winProbabilityScore ?? 0);
                     const suburb = row.suburb || row.contactSuburb || '-';
                     return (
-                      <Card key={row.id} className="border border-border-subtle bg-bg-section/40 space-y-2">
+                      <GlassCard key={row.id} className="border border-border-subtle bg-bg-section/40 space-y-2" padding="sm">
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <Link href={`/appraisals/${row.id}`} className="text-sm font-semibold text-text-primary hover:underline">
@@ -277,7 +304,21 @@ export default function AppraisalsView() {
                             </Link>
                             <p className="text-xs text-text-tertiary">{suburb}</p>
                           </div>
-                          <Badge variant={band.variant}>{band.label}</Badge>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold text-text-primary">{row.winProbabilityScore ?? 0}%</span>
+                            <Badge variant={band.variant}>{band.label}</Badge>
+                            <ScoreBreakdownTooltip
+                              label={`Win probability details for ${row.contactName}`}
+                              meaning="Estimates the likelihood this appraisal converts to a signed listing."
+                              bullets={[
+                                'Stage, prep progress, and vendor profile lift the score.',
+                                'Decision makers, timeline, and expectations add confidence.',
+                                'Overdue prep or lost outcomes reduce the score.',
+                              ]}
+                              reasons={row.winProbabilityReasons}
+                              bands="Hot is 75+, Warm is 45-74, Cold is below 45."
+                            />
+                          </div>
                         </div>
                         <div className="text-xs text-text-secondary">
                           Appointment: {formatDateTime(row.appointmentAt)}
@@ -293,22 +334,22 @@ export default function AppraisalsView() {
                         <div className="text-xs text-text-tertiary">
                           Owner: {row.owner?.name || row.owner?.email || 'Unassigned'}
                         </div>
-                      </Card>
+                      </GlassCard>
                     );
                   })
                 )}
               </div>
-            </Card>
+            </GlassCard>
           ))}
         </div>
       ) : (
-        <Card className="overflow-hidden">
-          <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
-            <div>
-              <p className="text-sm font-semibold text-text-primary">Appraisals list</p>
-              <p className="text-xs text-text-tertiary">{total} appraisals</p>
-            </div>
-            {error && <p className="text-xs text-destructive">{error}</p>}
+        <GlassCard className="overflow-hidden" padding="none">
+          <div className="border-b border-border-subtle px-4 py-3">
+            <SectionHeader
+              title="Appraisals list"
+              subtitle={`${total} appraisals`}
+              actions={error ? <p className="text-xs text-destructive">{error}</p> : undefined}
+            />
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -353,6 +394,17 @@ export default function AppraisalsView() {
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-semibold text-text-primary">{row.winProbabilityScore ?? 0}%</span>
                             <Badge variant={band.variant}>{band.label}</Badge>
+                            <ScoreBreakdownTooltip
+                              label={`Win probability details for ${row.contactName}`}
+                              meaning="Estimates the likelihood this appraisal converts to a signed listing."
+                              bullets={[
+                                'Stage, prep progress, and vendor profile lift the score.',
+                                'Decision makers, timeline, and expectations add confidence.',
+                                'Overdue prep or lost outcomes reduce the score.',
+                              ]}
+                              reasons={row.winProbabilityReasons}
+                              bands="Hot is 75+, Warm is 45-74, Cold is below 45."
+                            />
                           </div>
                         </td>
                         <td className="px-4 py-3">
@@ -393,7 +445,7 @@ export default function AppraisalsView() {
               </Button>
             </div>
           </div>
-        </Card>
+        </GlassCard>
       )}
     </div>
   );

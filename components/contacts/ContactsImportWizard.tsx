@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type ChangeEvent } from 'react';
 import { Button, Card, Input, Select } from '@/components/ui';
+import InfoTooltip from '@/components/ui/InfoTooltip';
 import { useOrgConfig } from '@/hooks/useOrgConfig';
 import { useSession } from '@/hooks/useSession';
 
@@ -32,7 +33,7 @@ const FIELD_DEFS = [
   { key: 'temperature', label: 'Temperature', aliases: ['temperature', 'heat', 'lead temperature', 'lead_temperature'] },
   { key: 'last_touch_at', label: 'Last touch', aliases: ['last touch', 'last_touch_at', 'last contacted', 'last_contacted'] },
   { key: 'next_touch_at', label: 'Next touch', aliases: ['next touch', 'next_touch_at', 'next follow up', 'next_follow_up'] },
-  { key: 'tags', label: 'Tags', aliases: ['tags', 'tag', 'labels'] },
+  { key: 'tags', label: 'Tags', aliases: ['tags', 'tag', 'labels'], tooltip: 'Use commas or semicolons to separate multiple tags.' },
 ];
 
 const DEDUPE_OPTIONS = [
@@ -263,7 +264,12 @@ export default function ContactsImportWizard() {
             {FIELD_DEFS.map((field) => (
               <Select
                 key={field.key}
-                label={field.label}
+                label={field.tooltip ? (
+                  <span className="inline-flex items-center gap-1">
+                    {field.label}
+                    <InfoTooltip label={`${field.label} info`} content={<p className="text-xs text-text-secondary">{field.tooltip}</p>} />
+                  </span>
+                ) : field.label}
                 value={mapping[field.key] ?? ''}
                 onChange={(event) => updateMapping(field.key, event.target.value)}
               >

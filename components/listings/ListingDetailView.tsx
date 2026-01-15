@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Badge, Button, Card, Chip, Input, Select, Textarea } from '@/components/ui';
+import { Badge, Button, Card, Chip, GlassCard, Input, MetricCard, Select, Textarea } from '@/components/ui';
+import InfoTooltip from '@/components/ui/InfoTooltip';
+import ScoreBreakdownTooltip from '@/components/ui/ScoreBreakdownTooltip';
 import { useOrgConfig } from '@/hooks/useOrgConfig';
 import { cn } from '@/lib/utils';
 
@@ -749,10 +751,10 @@ export default function ListingDetailView({ listingId }: { listingId: string }) 
     <div className="space-y-6">
       {error && <p className="text-sm text-destructive">{error}</p>}
 
-      <Card className="space-y-4">
+      <GlassCard className="space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-lg font-semibold text-text-primary">{listing.address || 'Listing'}</p>
+            <p className="text-2xl font-semibold text-text-primary">{listing.address || 'Listing'}</p>
             <p className="text-xs text-text-tertiary">{listing.suburb || 'No suburb'}</p>
             {listing.vendor && (
               <div className="mt-2 text-xs text-text-tertiary">
@@ -760,12 +762,61 @@ export default function ListingDetailView({ listingId }: { listingId: string }) 
               </div>
             )}
           </div>
-          <div className="text-right">
-            <p className="text-xs uppercase tracking-[0.2em] text-text-tertiary">Campaign health</p>
-            <div className="mt-1 flex items-center justify-end gap-2">
-              <span className="text-xl font-semibold text-text-primary">{listing.campaignHealthScore ?? 0}</span>
-              <Badge variant={band.variant}>{band.label}</Badge>
-            </div>
+        </div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <MetricCard
+            label="Status"
+            value={<span className="text-2xl font-semibold text-text-primary">{listing.status}</span>}
+            helper={listing.listedAt ? `Listed ${formatDate(listing.listedAt)}` : 'Not yet listed'}
+          />
+          <MetricCard
+            label="Days on market"
+            value={listing.daysOnMarket}
+            helper={listing.listedAt ? `Since ${formatDate(listing.listedAt)}` : 'Draft listing'}
+          />
+          <MetricCard
+            label="Campaign health"
+            value={(
+              <div className="flex items-center gap-2">
+                <span>{listing.campaignHealthScore ?? 0}</span>
+                <Badge variant={band.variant}>{band.label}</Badge>
+                <ScoreBreakdownTooltip
+                  label={`Campaign health details for ${listing.address || 'listing'}`}
+                  meaning="Tracks campaign momentum based on milestones, activity, and vendor updates."
+                  bullets={[
+                    'Checklist and milestones progress lift health.',
+                    'Recent enquiries and inspections add momentum.',
+                    'Overdue vendor updates or milestones reduce health.',
+                  ]}
+                  reasons={listing.campaignHealthReasons}
+                  bands="Healthy is 70+, Watch is 40-69, Stalling is below 40."
+                />
+              </div>
+            )}
+            helper="Momentum across milestones and buyer activity"
+          />
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <div className="rounded-md border border-border-subtle px-3 py-2 text-xs text-text-tertiary">
+            Next milestone: <span className="text-text-primary">{formatDate(listing.nextMilestoneDue)}</span>
+          </div>
+          <div className="rounded-md border border-border-subtle px-3 py-2 text-xs text-text-tertiary">
+            Next action: <span className="text-text-primary">{nextAction}</span>
+          </div>
+          <div className="flex items-center gap-2 rounded-md border border-border-subtle px-3 py-2 text-xs text-text-tertiary">
+            Vendor cadence:
+            <span className={cn(listing.vendorUpdateOverdue ? 'text-red-400 font-semibold' : 'text-text-primary')}>
+              {listing.vendorUpdateOverdue ? 'Overdue' : 'On track'}
+            </span>
+            <InfoTooltip
+              label="Vendor cadence info"
+              content={<p className="text-xs text-text-secondary">Updates should be sent every 7 days. Overdue listings lose campaign momentum.</p>}
+            />
+          </div>
+          <div className="rounded-md border border-border-subtle px-3 py-2 text-xs text-text-tertiary">
+            Last update: <span className={cn(listing.vendorUpdateOverdue ? 'text-red-400 font-semibold' : 'text-text-primary')}>
+              {formatDate(listing.vendorUpdateLastSent)}
+            </span>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -779,27 +830,7 @@ export default function ListingDetailView({ listingId }: { listingId: string }) 
             ))
           )}
         </div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-          <div>
-            <p className="text-xs text-text-tertiary">Days on market</p>
-            <p className="text-sm font-semibold text-text-primary">{listing.daysOnMarket}</p>
-          </div>
-          <div>
-            <p className="text-xs text-text-tertiary">Next milestone</p>
-            <p className="text-sm font-semibold text-text-primary">{formatDate(listing.nextMilestoneDue)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-text-tertiary">Vendor update</p>
-            <p className={cn('text-sm font-semibold', listing.vendorUpdateOverdue ? 'text-red-500' : 'text-text-primary')}>
-              {formatDate(listing.vendorUpdateLastSent)}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs text-text-tertiary">Next action</p>
-            <p className="text-sm font-semibold text-text-primary">{nextAction}</p>
-          </div>
-        </div>
-      </Card>
+      </GlassCard>
 
       <div className="flex flex-wrap gap-2">
         {[
@@ -818,7 +849,7 @@ export default function ListingDetailView({ listingId }: { listingId: string }) 
       </div>
 
       {activeTab === 'overview' && (
-        <Card className="space-y-4">
+        <GlassCard className="space-y-4">
           <p className="text-sm font-semibold text-text-primary">Listing details</p>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <Input
@@ -919,12 +950,18 @@ export default function ListingDetailView({ listingId }: { listingId: string }) 
               {saving ? 'Saving...' : 'Save changes'}
             </Button>
           </div>
-        </Card>
+        </GlassCard>
       )}
 
       {activeTab === 'milestones' && (
-        <Card className="space-y-4">
-          <p className="text-sm font-semibold text-text-primary">Campaign milestones</p>
+        <GlassCard className="space-y-4">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold text-text-primary">Campaign milestones</p>
+            <InfoTooltip
+              label="Milestones timing info"
+              content={<p className="text-xs text-text-secondary">Keeping milestones on time keeps the campaign healthy and boosts buyer momentum.</p>}
+            />
+          </div>
           <div className="space-y-3">
             {milestones.length === 0 ? (
               <p className="text-sm text-text-secondary">No milestones yet.</p>
@@ -1007,11 +1044,11 @@ export default function ListingDetailView({ listingId }: { listingId: string }) 
               <Button variant="secondary" onClick={addMilestone}>Add milestone</Button>
             </div>
           </div>
-        </Card>
+        </GlassCard>
       )}
 
       {activeTab === 'checklist' && (
-        <Card className="space-y-4">
+        <GlassCard className="space-y-4">
           <p className="text-sm font-semibold text-text-primary">Listing checklist</p>
           <p className="text-xs text-text-tertiary">Progress {checklistProgress}</p>
           <div className="space-y-3">
@@ -1084,12 +1121,12 @@ export default function ListingDetailView({ listingId }: { listingId: string }) 
               <Button variant="secondary" onClick={addChecklistItem}>Add item</Button>
             </div>
           </div>
-        </Card>
+        </GlassCard>
       )}
 
       {activeTab === 'buyers' && (
         <div className="space-y-4">
-          <Card className="space-y-3">
+          <GlassCard className="space-y-3">
             <p className="text-sm font-semibold text-text-primary">Enquiries</p>
             {enquiries.length === 0 ? (
               <p className="text-sm text-text-secondary">No enquiries logged yet.</p>
@@ -1141,9 +1178,9 @@ export default function ListingDetailView({ listingId }: { listingId: string }) 
               />
             </div>
             <Button variant="secondary" onClick={addEnquiry}>Add enquiry</Button>
-          </Card>
+          </GlassCard>
 
-          <Card className="space-y-3">
+          <GlassCard className="space-y-3">
             <p className="text-sm font-semibold text-text-primary">Buyer pipeline</p>
             {buyers.length === 0 ? (
               <p className="text-sm text-text-secondary">No buyers linked yet.</p>
@@ -1236,12 +1273,12 @@ export default function ListingDetailView({ listingId }: { listingId: string }) 
               />
             </div>
             <Button variant="secondary" onClick={addBuyer}>Add buyer</Button>
-          </Card>
+          </GlassCard>
         </div>
       )}
 
       {activeTab === 'inspections' && (
-        <Card className="space-y-4">
+        <GlassCard className="space-y-4">
           <p className="text-sm font-semibold text-text-primary">Inspections</p>
           {inspections.length === 0 ? (
             <p className="text-sm text-text-secondary">No inspections scheduled yet.</p>
@@ -1294,12 +1331,18 @@ export default function ListingDetailView({ listingId }: { listingId: string }) 
             />
           </div>
           <Button variant="secondary" onClick={addInspection}>Add inspection</Button>
-        </Card>
+        </GlassCard>
       )}
 
       {activeTab === 'vendor-comms' && (
-        <Card className="space-y-4">
-          <p className="text-sm font-semibold text-text-primary">Vendor communications</p>
+        <GlassCard className="space-y-4">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold text-text-primary">Vendor communications</p>
+            <InfoTooltip
+              label="Vendor updates info"
+              content={<p className="text-xs text-text-secondary">Regular vendor updates keep confidence high and improve campaign health.</p>}
+            />
+          </div>
           {vendorComms.length === 0 ? (
             <p className="text-sm text-text-secondary">No vendor comms logged yet.</p>
           ) : (
@@ -1341,12 +1384,12 @@ export default function ListingDetailView({ listingId }: { listingId: string }) 
             />
           </div>
           <Button variant="secondary" onClick={addVendorComm}>Log vendor update</Button>
-        </Card>
+        </GlassCard>
       )}
 
       {activeTab === 'reports' && (
         <div className="space-y-4">
-          <Card className="space-y-3">
+          <GlassCard className="space-y-3">
             <p className="text-sm font-semibold text-text-primary">Generate vendor report</p>
             <Textarea
               label="Agent commentary"
@@ -1363,9 +1406,9 @@ export default function ListingDetailView({ listingId }: { listingId: string }) 
               placeholder="Pricing review, marketing refresh, open home schedule."
             />
             <Button variant="secondary" onClick={createReport}>Generate report</Button>
-          </Card>
+          </GlassCard>
 
-          <Card className="space-y-3">
+          <GlassCard className="space-y-3">
             <p className="text-sm font-semibold text-text-primary">Report history</p>
             {reports.length === 0 ? (
               <p className="text-sm text-text-secondary">No reports generated yet.</p>
@@ -1384,7 +1427,7 @@ export default function ListingDetailView({ listingId }: { listingId: string }) 
                 ))}
               </div>
             )}
-          </Card>
+          </GlassCard>
         </div>
       )}
     </div>

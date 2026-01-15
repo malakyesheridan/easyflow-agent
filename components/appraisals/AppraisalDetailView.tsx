@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Badge, Button, Card, Input, Select, Textarea } from '@/components/ui';
+import { Badge, Button, Card, GlassCard, Input, Select, Textarea } from '@/components/ui';
+import InfoTooltip from '@/components/ui/InfoTooltip';
+import ScoreBreakdownTooltip from '@/components/ui/ScoreBreakdownTooltip';
 import { useOrgConfig } from '@/hooks/useOrgConfig';
 
 const STAGES = [
@@ -14,6 +16,16 @@ const STAGES = [
   { value: 'won', label: 'Won' },
   { value: 'lost', label: 'Lost' },
 ];
+
+const STAGE_DESCRIPTIONS: Record<string, string> = {
+  booked: 'Appointment booked with the vendor.',
+  confirmed: 'Appointment confirmed with decision makers.',
+  prepped: 'Prep tasks in progress or completed.',
+  attended: 'Appraisal meeting completed.',
+  followup_sent: 'Follow-up plan or update sent.',
+  won: 'Listing secured.',
+  lost: 'Listing lost or delayed.',
+};
 
 const MEETING_TYPES = [
   { value: 'in_person', label: 'In person' },
@@ -440,7 +452,7 @@ export default function AppraisalDetailView({ appraisalId }: { appraisalId: stri
     <div className="space-y-6">
       {error && <p className="text-sm text-destructive">{error}</p>}
 
-      <Card className="space-y-4">
+      <GlassCard className="space-y-4">
         <div className="flex items-start justify-between gap-4">
           <div>
             <Link href={`/contacts/${appraisal.contact.id}`} className="text-lg font-semibold text-text-primary hover:underline">
@@ -449,7 +461,20 @@ export default function AppraisalDetailView({ appraisalId }: { appraisalId: stri
             <p className="text-xs text-text-tertiary">{appraisal.contact.suburb || 'No suburb'}</p>
           </div>
           <div className="text-right">
-            <p className="text-xs uppercase tracking-[0.2em] text-text-tertiary">Win probability</p>
+            <div className="flex items-center justify-end gap-1 text-xs uppercase tracking-[0.2em] text-text-tertiary">
+              <span>Win probability</span>
+              <ScoreBreakdownTooltip
+                label={`Win probability details for ${appraisal.contact.name}`}
+                meaning="Estimates the likelihood this appraisal converts to a signed listing."
+                bullets={[
+                  'Stage, prep progress, and vendor profile lift the score.',
+                  'Decision makers, timeline, and expectations add confidence.',
+                  'Overdue prep or lost outcomes reduce the score.',
+                ]}
+                reasons={appraisal.winProbabilityReasons}
+                bands="Hot is 75+, Warm is 45-74, Cold is below 45."
+              />
+            </div>
             <div className="mt-1 flex items-center justify-end gap-2">
               <span className="text-xl font-semibold text-text-primary">{appraisal.winProbabilityScore}%</span>
               <Badge variant={band.variant}>{band.label}</Badge>
@@ -465,13 +490,27 @@ export default function AppraisalDetailView({ appraisalId }: { appraisalId: stri
                 </Badge>
               ))}
         </div>
-      </Card>
+      </GlassCard>
 
       <Card className="space-y-4">
         <p className="text-sm font-semibold text-text-primary">Appointment details</p>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <Select
-            label="Stage"
+            label={(
+              <span className="inline-flex items-center gap-1">
+                Stage
+                <InfoTooltip
+                  label="Appraisal stage definitions"
+                  content={(
+                    <ul className="list-disc space-y-1 pl-4 text-xs text-text-secondary">
+                      {STAGES.map((stage) => (
+                        <li key={stage.value}>{stage.label}: {STAGE_DESCRIPTIONS[stage.value]}</li>
+                      ))}
+                    </ul>
+                  )}
+                />
+              </span>
+            )}
             value={draft.stage}
             onChange={(event) => setDraft((prev) => ({ ...prev, stage: event.target.value }))}
           >
