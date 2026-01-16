@@ -1,20 +1,12 @@
-import ScheduleView from '@/components/schedule/ScheduleView';
-import { PageContainer, PageHeader } from '@/components/ui';
-import { getOrgIdFromSearchParams } from '@/lib/org/orgId';
+import CalendarView from '@/components/calendar/CalendarView';
+import { PageContainer } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
 
-export default function SchedulePage({
-  searchParams,
-}: {
-  searchParams?: { [key: string]: string | string[] | undefined };
-}) {
-  const orgId = getOrgIdFromSearchParams(searchParams);
-
+export default function SchedulePage() {
   return (
     <PageContainer>
-      <PageHeader title="Calendar" />
-      <ScheduleView orgId={orgId} />
+      <CalendarView />
     </PageContainer>
   );
 }
