@@ -2,6 +2,14 @@ import { z } from 'zod';
 
 export const reportTemplateSectionsSchema = z.record(z.boolean()).optional();
 export const reportTemplatePromptsSchema = z.record(z.string().trim().max(500)).optional();
+export const reportTemplateBrandingSchema = z
+  .object({
+    showLogo: z.boolean().optional(),
+    headerStyle: z.enum(['compact', 'full']).optional(),
+    accentColor: z.string().trim().max(20).optional(),
+    logoPosition: z.enum(['left', 'center', 'right']).optional(),
+  })
+  .optional();
 
 export const reportTemplateUpdateSchema = z.object({
   orgId: z.string().uuid(),
@@ -18,6 +26,7 @@ export const reportTemplateUpdateSchema = z.object({
   includeMarketOverview: z.boolean().optional(),
   sectionsJson: reportTemplateSectionsSchema,
   promptsJson: reportTemplatePromptsSchema,
+  brandingJson: reportTemplateBrandingSchema,
   commentaryTemplate: z.string().trim().max(2000).nullable().optional(),
 });
 
@@ -36,6 +45,7 @@ export const reportTemplatePatchSchema = z.object({
   includeMarketOverview: z.boolean().optional(),
   sectionsJson: reportTemplateSectionsSchema,
   promptsJson: reportTemplatePromptsSchema,
+  brandingJson: reportTemplateBrandingSchema,
   commentaryTemplate: z.string().trim().max(2000).nullable().optional(),
 });
 

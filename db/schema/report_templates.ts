@@ -26,6 +26,7 @@ export const reportTemplates = pgTable(
     includeMarketOverview: boolean('include_market_overview').notNull().default(true),
     sectionsJson: jsonb('sections_json').notNull().default({}),
     promptsJson: jsonb('prompts_json').notNull().default({}),
+    brandingJson: jsonb('branding_json').notNull().default({}),
     commentaryTemplate: text('commentary_template'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

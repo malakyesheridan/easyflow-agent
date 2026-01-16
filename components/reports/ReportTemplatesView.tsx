@@ -17,6 +17,12 @@ type ReportTemplate = {
   cadenceDefaultDayOfWeek: number | null;
   sectionsJson?: Record<string, boolean> | null;
   promptsJson?: Record<string, string> | null;
+  brandingJson?: {
+    showLogo?: boolean;
+    headerStyle?: 'compact' | 'full';
+    accentColor?: string | null;
+    logoPosition?: 'left' | 'center' | 'right';
+  } | null;
 };
 
 type TemplateDraft = {
@@ -29,6 +35,12 @@ type TemplateDraft = {
   cadenceDefaultDayOfWeek: string;
   sections: Record<string, boolean>;
   prompts: Record<string, string>;
+  branding: {
+    showLogo: boolean;
+    headerStyle: 'compact' | 'full';
+    accentColor: string;
+    logoPosition: 'left' | 'center' | 'right';
+  };
 };
 
 const SECTION_OPTIONS = [
@@ -53,6 +65,13 @@ const DEFAULT_PROMPTS = {
   feedbackThemes: 'Key buyer feedback themes?',
 };
 
+const DEFAULT_BRANDING = {
+  showLogo: true,
+  headerStyle: 'full' as const,
+  accentColor: '',
+  logoPosition: 'left' as const,
+};
+
 function toDraft(template?: ReportTemplate | null): TemplateDraft {
   const sections = template?.sectionsJson && Object.keys(template.sectionsJson).length > 0
     ? (template.sectionsJson as Record<string, boolean>)
@@ -60,6 +79,14 @@ function toDraft(template?: ReportTemplate | null): TemplateDraft {
   const prompts = template?.promptsJson && Object.keys(template.promptsJson).length > 0
     ? (template.promptsJson as Record<string, string>)
     : DEFAULT_PROMPTS;
+  const branding = template?.brandingJson
+    ? {
+        showLogo: template.brandingJson.showLogo ?? DEFAULT_BRANDING.showLogo,
+        headerStyle: template.brandingJson.headerStyle ?? DEFAULT_BRANDING.headerStyle,
+        accentColor: template.brandingJson.accentColor ?? DEFAULT_BRANDING.accentColor,
+        logoPosition: template.brandingJson.logoPosition ?? DEFAULT_BRANDING.logoPosition,
+      }
+    : DEFAULT_BRANDING;
 
   return {
     id: template?.id ?? null,
@@ -71,6 +98,7 @@ function toDraft(template?: ReportTemplate | null): TemplateDraft {
     cadenceDefaultDayOfWeek: template?.cadenceDefaultDayOfWeek?.toString() ?? '',
     sections: { ...sections },
     prompts: { ...prompts },
+    branding: { ...branding },
   };
 }
 
@@ -149,6 +177,12 @@ export default function ReportTemplatesView() {
           : null,
         sectionsJson: draft.sections,
         promptsJson: draft.prompts,
+        brandingJson: {
+          showLogo: draft.branding.showLogo,
+          headerStyle: draft.branding.headerStyle,
+          accentColor: draft.branding.accentColor || null,
+          logoPosition: draft.branding.logoPosition,
+        },
       };
 
       const res = await fetch(
@@ -364,6 +398,62 @@ export default function ReportTemplatesView() {
               }
               rows={2}
             />
+          </div>
+          <div className="space-y-3">
+            <p className="text-sm font-semibold text-text-primary">Branding</p>
+            <label className="flex items-center gap-2 text-sm text-text-secondary">
+              <input
+                type="checkbox"
+                checked={draft.branding.showLogo}
+                onChange={(event) =>
+                  setDraft((prev) => ({
+                    ...prev,
+                    branding: { ...prev.branding, showLogo: event.target.checked },
+                  }))
+                }
+              />
+              Show logo in header
+            </label>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <Select
+                label="Header style"
+                value={draft.branding.headerStyle}
+                onChange={(event) =>
+                  setDraft((prev) => ({
+                    ...prev,
+                    branding: { ...prev.branding, headerStyle: event.target.value as 'compact' | 'full' },
+                  }))
+                }
+              >
+                <option value="full">Full</option>
+                <option value="compact">Compact</option>
+              </Select>
+              <Select
+                label="Logo position"
+                value={draft.branding.logoPosition}
+                onChange={(event) =>
+                  setDraft((prev) => ({
+                    ...prev,
+                    branding: { ...prev.branding, logoPosition: event.target.value as 'left' | 'center' | 'right' },
+                  }))
+                }
+              >
+                <option value="left">Left</option>
+                <option value="center">Center</option>
+                <option value="right">Right</option>
+              </Select>
+              <Input
+                label="Accent color"
+                value={draft.branding.accentColor}
+                onChange={(event) =>
+                  setDraft((prev) => ({
+                    ...prev,
+                    branding: { ...prev.branding, accentColor: event.target.value },
+                  }))
+                }
+                placeholder="#0f172a"
+              />
+            </div>
           </div>
           <label className="flex items-center gap-2 text-sm text-text-secondary">
             <input

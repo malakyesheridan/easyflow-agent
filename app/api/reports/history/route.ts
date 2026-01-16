@@ -8,13 +8,14 @@ import { listings } from '@/db/schema/listings';
 import { contacts } from '@/db/schema/contacts';
 import { reportTemplates } from '@/db/schema/report_templates';
 import { users } from '@/db/schema/users';
+import { getBaseUrl } from '@/lib/url';
 
 function toIso(value: Date | null) {
   return value ? value.toISOString() : null;
 }
 
-function buildShareUrl(token: string) {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+function buildShareUrl(token: string, req?: Request) {
+  const baseUrl = getBaseUrl(req);
   return `${baseUrl.replace(/\/$/, '')}/reports/vendor/${token}`;
 }
 
@@ -74,7 +75,7 @@ export const GET = withRoute(async (req: Request) => {
     rows.map((row) => ({
       id: String(row.id),
       createdAt: toIso(row.createdAt),
-      shareUrl: buildShareUrl(row.shareToken),
+      shareUrl: buildShareUrl(row.shareToken, req),
       deliveryMethod: row.deliveryMethod ?? null,
       template: row.templateId ? { id: String(row.templateId), name: row.templateName ?? '' } : null,
       listing: row.listingId

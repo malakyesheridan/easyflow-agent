@@ -13,6 +13,7 @@ import { queueXeroInvoiceSyncBestEffort } from '@/lib/integrations/xeroSync';
 import { toNumericString } from '@/lib/utils/quantity';
 import { createSecureToken } from '@/lib/security/tokens';
 import { allowDemoBilling } from '@/lib/financials/demoBilling';
+import { getBaseUrl } from '@/lib/url';
 
 type DbClient = Parameters<typeof withIntegrationOrgScope>[1] extends (db: infer T) => Promise<any> ? T : never;
 
@@ -29,7 +30,7 @@ function normalizeSummary(value: string | null | undefined): string | null {
 }
 
 function buildInvoiceShareUrl(token: string): string {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+  const baseUrl = getBaseUrl();
   return `${baseUrl.replace(/\/$/, '')}/invoices/share/${token}`;
 }
 

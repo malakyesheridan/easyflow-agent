@@ -26,6 +26,7 @@ function buildTemplateValues(validated: ReportTemplateUpdateInput | ReportTempla
     includeMarketOverview: validated.includeMarketOverview ?? true,
     sectionsJson: validated.sectionsJson ?? {},
     promptsJson: validated.promptsJson ?? {},
+    brandingJson: validated.brandingJson ?? {},
     commentaryTemplate: validated.commentaryTemplate === undefined ? null : validated.commentaryTemplate,
     updatedAt: new Date(),
   } as NewReportTemplate;
@@ -136,6 +137,7 @@ export async function updateReportTemplate(templateId: string, input: ReportTemp
         includeMarketOverview: validated.includeMarketOverview ?? existing.includeMarketOverview,
         sectionsJson: validated.sectionsJson ?? (existing.sectionsJson as Record<string, boolean> | null) ?? {},
         promptsJson: validated.promptsJson ?? (existing.promptsJson as Record<string, string> | null) ?? {},
+        brandingJson: validated.brandingJson ?? (existing.brandingJson as Record<string, unknown> | null) ?? {},
         commentaryTemplate: validated.commentaryTemplate ?? existing.commentaryTemplate,
         updatedAt: new Date(),
       })

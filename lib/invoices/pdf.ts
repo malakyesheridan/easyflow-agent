@@ -1,13 +1,11 @@
 import { pdf } from '@react-pdf/renderer';
+import { getBaseUrl } from '@/lib/url';
 
 const SUPPORTED_IMAGE_MIME = new Set(['image/png', 'image/jpeg', 'image/jpg']);
 
 function resolveBaseUrl(origin?: string): string {
   if (origin) return origin;
-  const envBase = process.env.NEXT_PUBLIC_BASE_URL?.trim();
-  if (envBase) return envBase;
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return 'http://localhost:3000';
+  return getBaseUrl();
 }
 
 function toAbsoluteUrl(input: string, origin?: string): string {

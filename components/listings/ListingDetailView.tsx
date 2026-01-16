@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -7,6 +7,7 @@ import { Badge, Button, Card, Chip, GlassCard, Input, MetricCard, SectionHeader,
 import InfoTooltip from '@/components/ui/InfoTooltip';
 import ScoreBreakdownTooltip from '@/components/ui/ScoreBreakdownTooltip';
 import { useOrgConfig } from '@/hooks/useOrgConfig';
+import { VENDOR_REPORT_SECTION_LABELS } from '@/lib/reports/sections';
 import { cn } from '@/lib/utils';
 
 const STATUS_OPTIONS = [
@@ -65,6 +66,11 @@ const DELIVERY_OPTIONS = [
   { value: 'sms', label: 'Texted (logged)' },
   { value: 'logged', label: 'Logged only' },
 ];
+
+const DEFAULT_REPORT_SECTIONS = VENDOR_REPORT_SECTION_LABELS.reduce<Record<string, boolean>>((acc, section) => {
+  acc[section.key] = true;
+  return acc;
+}, {});
 
 const LISTING_TABS = new Set([
   'overview',
@@ -216,6 +222,13 @@ function formatDelivery(method: string | null) {
   return 'Share link';
 }
 
+function resolveReportSections(template?: ReportTemplateOption | null) {
+  return {
+    ...DEFAULT_REPORT_SECTIONS,
+    ...(template?.sectionsJson ?? {}),
+  };
+}
+
 function toDateInput(value: string | null) {
   if (!value) return '';
   const date = new Date(value);
@@ -247,6 +260,7 @@ export default function ListingDetailView({ listingId }: { listingId: string }) 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [reportSaving, setReportSaving] = useState(false);
+  const [reportPreviewing, setReportPreviewing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reportStatus, setReportStatus] = useState<{ error: string | null; success: string | null }>({
     error: null,
@@ -303,6 +317,7 @@ export default function ListingDetailView({ listingId }: { listingId: string }) 
     marketingChannels: '',
     comparableSales: '',
   });
+  const [reportSections, setReportSections] = useState<Record<string, boolean>>({ ...DEFAULT_REPORT_SECTIONS });
 
   const loadListing = useCallback(async () => {
     const res = await fetch(`/api/listings/${listingId}?orgId=${orgId}`, { cache: 'no-store' });
@@ -486,6 +501,10 @@ export default function ListingDetailView({ listingId }: { listingId: string }) 
     const selectedId = reportDraft.templateId || reportSettingsDraft.templateId;
     return reportTemplates.find((template) => template.id === selectedId) ?? null;
   }, [reportDraft.templateId, reportSettingsDraft.templateId, reportTemplates]);
+
+  useEffect(() => {
+    setReportSections(resolveReportSections(selectedTemplate));
+  }, [selectedTemplate]);
 
   useEffect(() => {
     if (!defaultTemplateId) return;
@@ -910,6 +929,41 @@ export default function ListingDetailView({ listingId }: { listingId: string }) 
     }
   };
 
+  const previewReport = async () => {
+    if (!orgId || !listingId) return;
+    setReportPreviewing(true);
+    setReportStatus({ error: null, success: null });
+    setReportShareUrl(null);
+    try {
+      const res = await fetch(`/api/listings/${listingId}/reports/preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orgId,
+          templateId: reportDraft.templateId || undefined,
+          deliveryMethod: reportDraft.deliveryMethod,
+          commentary: reportDraft.commentary,
+          recommendations: reportDraft.recommendations,
+          feedbackThemes: reportDraft.feedbackThemes,
+          marketingChannels: reportDraft.marketingChannels,
+          comparableSales: reportDraft.comparableSales,
+          sectionsOverride: reportSections,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json?.error?.message || 'Failed to create preview');
+      const previewUrl = json?.data?.previewUrl;
+      if (previewUrl) {
+        window.open(previewUrl, '_blank', 'noopener,noreferrer');
+      }
+      setReportStatus({ error: null, success: 'Preview ready.' });
+    } catch (err) {
+      setReportStatus({ error: err instanceof Error ? err.message : 'Failed to create preview', success: null });
+    } finally {
+      setReportPreviewing(false);
+    }
+  };
+
   const createReport = async () => {
     if (!orgId || !listingId) return;
     setReportSaving(true);
@@ -928,6 +982,7 @@ export default function ListingDetailView({ listingId }: { listingId: string }) 
           feedbackThemes: reportDraft.feedbackThemes,
           marketingChannels: reportDraft.marketingChannels,
           comparableSales: reportDraft.comparableSales,
+          sectionsOverride: reportSections,
         }),
       });
       const json = await res.json();
@@ -1777,6 +1832,38 @@ export default function ListingDetailView({ listingId }: { listingId: string }) 
                 ))}
               </Select>
             </div>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-semibold text-text-primary">Included sections</p>
+                <InfoTooltip
+                  label="Report sections info"
+                  content={<p className="text-xs text-text-secondary">Toggle sections that should appear in this report.</p>}
+                />
+              </div>
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                {VENDOR_REPORT_SECTION_LABELS.map((section) => (
+                  <div
+                    key={section.key}
+                    className="flex items-center justify-between rounded-md border border-border-subtle bg-bg-section/30 px-3 py-2"
+                  >
+                    <label className="flex items-center gap-2 text-sm text-text-secondary">
+                      <input
+                        type="checkbox"
+                        checked={reportSections[section.key] ?? false}
+                        onChange={(event) =>
+                          setReportSections((prev) => ({ ...prev, [section.key]: event.target.checked }))
+                        }
+                      />
+                      {section.label}
+                    </label>
+                    <InfoTooltip
+                      label={`${section.label} info`}
+                      content={<p className="text-xs text-text-secondary">{section.tooltip}</p>}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
             <Textarea
               label="Commentary"
               value={reportDraft.commentary}
@@ -1813,7 +1900,10 @@ export default function ListingDetailView({ listingId }: { listingId: string }) 
               placeholder="Address + sale price notes."
             />
             <div className="flex flex-wrap items-center gap-2">
-              <Button variant="secondary" onClick={createReport} disabled={reportSaving}>
+              <Button variant="ghost" onClick={previewReport} disabled={reportPreviewing || reportSaving}>
+                {reportPreviewing ? 'Preparing preview...' : 'Preview'}
+              </Button>
+              <Button variant="secondary" onClick={createReport} disabled={reportSaving || reportPreviewing}>
                 {reportSaving ? 'Generating...' : 'Generate report'}
               </Button>
               {reportShareUrl && (
@@ -1837,7 +1927,7 @@ export default function ListingDetailView({ listingId }: { listingId: string }) 
                         {report.templateName || 'Vendor report'}
                       </p>
                       <p className="text-xs text-text-tertiary">
-                        {formatDate(report.createdAt)} · {formatDelivery(report.deliveryMethod)}
+                        {formatDate(report.createdAt)} Â- {formatDelivery(report.deliveryMethod)}
                       </p>
                       {report.createdBy && (
                         <p className="text-xs text-text-tertiary">
@@ -1858,3 +1948,4 @@ export default function ListingDetailView({ listingId }: { listingId: string }) 
     </div>
   );
 }
+
