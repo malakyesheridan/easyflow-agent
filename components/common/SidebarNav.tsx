@@ -33,7 +33,7 @@ export default function SidebarNav() {
     { href: '/appraisals', label: 'Appraisals' },
     { href: '/listings', label: 'Listings' },
     { href: '/reports', label: 'Reports' },
-    { href: '/daily-plan', label: 'Follow-ups' },
+    { href: '/follow-ups', label: 'Follow-ups' },
     { href: '/schedule', label: 'Calendar' },
     { href: '/notifications', label: config?.vocabulary?.notificationPlural ?? 'Notifications' },
     { href: '/announcements', label: config?.vocabulary?.announcementPlural ?? 'Announcements' },
@@ -50,7 +50,7 @@ export default function SidebarNav() {
   ];
 
   const crewNavItems: NavItem[] = [
-    { href: '/daily-plan', label: 'Follow-ups' },
+    { href: '/follow-ups', label: 'Follow-ups' },
     { href: '/schedule', label: 'Calendar' },
     { href: '/prospecting', label: 'Prospecting' },
     { href: '/contacts', label: 'Contacts' },

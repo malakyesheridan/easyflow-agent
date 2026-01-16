@@ -50,6 +50,7 @@ export * from './matching_config';
 export * from './suburb_zones';
 export * from './report_templates';
 export * from './report_drafts';
+export * from './followup_snoozes';
 export * from './buyers';
 export * from './listings';
 export * from './listing_milestones';

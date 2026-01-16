@@ -30,7 +30,7 @@ export default function MobileNav() {
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/prospecting', label: 'Prospecting', icon: Target },
     { href: '/contacts', label: 'Contacts', icon: Users },
-    { href: '/daily-plan', label: 'Follow-ups', icon: ListChecks },
+    { href: '/follow-ups', label: 'Follow-ups', icon: ListChecks },
     { href: '/schedule', label: 'Calendar', icon: CalendarDays },
     { href: '/notifications', label: config?.vocabulary?.notificationPlural ?? 'Notifications', icon: Bell },
   ];

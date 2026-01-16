@@ -26,7 +26,7 @@ export default function Home() {
             <p className="text-sm font-semibold text-text-primary">Listings</p>
             <p className="mt-1 text-sm text-text-secondary">Monitor active campaigns and vendor updates.</p>
           </a>
-          <a href="/daily-plan" className="rounded-lg bg-bg-card p-6 shadow-soft hover:shadow-lift transition-shadow">
+          <a href="/follow-ups" className="rounded-lg bg-bg-card p-6 shadow-soft hover:shadow-lift transition-shadow">
             <p className="text-sm font-semibold text-text-primary">Follow-ups</p>
             <p className="mt-1 text-sm text-text-secondary">Stay on top of priority seller tasks.</p>
           </a>

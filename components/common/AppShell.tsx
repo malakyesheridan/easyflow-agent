@@ -42,9 +42,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     if (isAuthRoute || loading || sessionLoading) return;
     if (!isMobile) return;
     if (!isCrewSurface) return;
-    if (pathname === '/daily-plan') return;
+    if (pathname === '/follow-ups') return;
     if (pathname === '/' || pathname === '/dashboard') {
-      router.replace('/daily-plan');
+      router.replace('/follow-ups');
     }
   }, [isAuthRoute, isCrewSurface, isMobile, loading, pathname, router, sessionLoading]);
 
