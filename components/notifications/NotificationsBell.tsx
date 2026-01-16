@@ -7,8 +7,10 @@ import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import NotificationsCenter, { type NotificationRow } from '@/components/notifications/NotificationsCenter';
 import { useOrgConfig } from '@/hooks/useOrgConfig';
+import { useSession } from '@/hooks/useSession';
 import useIsMobile from '@/hooks/useIsMobile';
 import { cn } from '@/lib/utils';
+import { NOTIFICATION_TYPE_LABELS } from '@/lib/notifications/constants';
 
 type ApiResponse<T> = { ok: true; data: T } | { ok: false; error: any };
 
@@ -17,16 +19,9 @@ function formatTime(iso: string): string {
   return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-const TYPE_LABELS: Record<NotificationRow['type'], string> = {
-  job_progress: 'Job',
-  warehouse_alert: 'Warehouse',
-  announcement: 'Announcement',
-  integration: 'Integration',
-  automation: 'Automation',
-};
-
 export default function NotificationsBell() {
   const { config } = useOrgConfig();
+  const { session } = useSession();
   const router = useRouter();
   const isMobile = useIsMobile();
   const orgId = config?.orgId ?? '';
@@ -87,6 +82,10 @@ export default function NotificationsBell() {
         await markOneRead(n.id);
       }
       setOpen(false);
+      if (n.deepLink) {
+        router.push(n.deepLink);
+        return;
+      }
       if (n.jobId) {
         router.push(`/jobs/${n.jobId}`);
         return;
@@ -109,6 +108,30 @@ export default function NotificationsBell() {
     },
     [markOneRead, router]
   );
+
+  useEffect(() => {
+    if (!orgId || !session?.actor?.userId) return;
+    const canSweep =
+      session.actor.capabilities?.includes('admin') ||
+      session.actor.capabilities?.includes('manage_org');
+    if (!canSweep) return;
+
+    const storageKey = `notification_sweep:${orgId}:${session.actor.userId}`;
+    const now = Date.now();
+    const lastRaw = typeof window !== 'undefined' ? window.localStorage.getItem(storageKey) : null;
+    const last = lastRaw ? Number(lastRaw) : 0;
+    if (last && now - last < 6 * 60 * 60 * 1000) return;
+
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(storageKey, String(now));
+    }
+
+    void fetch('/api/notifications/sweep', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orgId }),
+    });
+  }, [orgId, session?.actor?.capabilities, session?.actor?.userId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -171,10 +194,11 @@ export default function NotificationsBell() {
             )}
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[11px] uppercase text-text-tertiary">{TYPE_LABELS[item.type]}</span>
+              <span className="text-[11px] uppercase text-text-tertiary">{NOTIFICATION_TYPE_LABELS[item.type]}</span>
               <span className="text-[11px] text-text-tertiary">{formatTime(item.createdAt)}</span>
             </div>
-            <p className="mt-1 text-sm text-text-primary line-clamp-2">{item.message}</p>
+            <p className="mt-1 text-sm text-text-primary line-clamp-2">{item.title ?? item.message}</p>
+            {item.body && <p className="mt-1 text-xs text-text-secondary line-clamp-2">{item.body}</p>}
           </button>
         ))}
       </div>

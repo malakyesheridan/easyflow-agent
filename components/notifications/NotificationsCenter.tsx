@@ -6,22 +6,36 @@ import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import Chip from '@/components/ui/Chip';
 import { cn } from '@/lib/utils';
+import {
+  NOTIFICATION_SEVERITY_BADGES,
+  NOTIFICATION_TYPE_BADGES,
+  NOTIFICATION_TYPE_LABELS,
+  type NotificationSeverity,
+  type NotificationType,
+} from '@/lib/notifications/constants';
 
 export type NotificationRow = {
   id: string;
   orgId: string;
-  type: 'job_progress' | 'warehouse_alert' | 'announcement' | 'integration' | 'automation';
+  type: NotificationType;
+  title: string | null;
+  body: string | null;
+  severity: NotificationSeverity | null;
+  entityType: string | null;
+  entityId: string | null;
+  deepLink: string | null;
   jobId: string | null;
   eventKey: string | null;
   message: string;
   readAt: string | null;
+  dismissedAt: string | null;
   createdAt: string;
 };
 
 type ApiResponse<T> = { ok: true; data: T } | { ok: false; error: any };
 
 type StatusFilter = 'all' | 'unread' | 'read';
-type TypeFilter = 'all' | NotificationRow['type'];
+type TypeFilter = 'all' | NotificationType;
 
 const STATUS_FILTERS: Array<{ id: StatusFilter; label: string }> = [
   { id: 'all', label: 'All' },
@@ -31,20 +45,24 @@ const STATUS_FILTERS: Array<{ id: StatusFilter; label: string }> = [
 
 const TYPE_FILTERS: Array<{ id: TypeFilter; label: string }> = [
   { id: 'all', label: 'All types' },
-  { id: 'job_progress', label: 'Jobs' },
-  { id: 'warehouse_alert', label: 'Warehouse' },
+  { id: 'contact_followup_overdue', label: 'Contact follow-ups' },
+  { id: 'new_hot_prospect', label: 'Hot prospects' },
+  { id: 'appraisal_upcoming', label: 'Appraisals upcoming' },
+  { id: 'appraisal_followup_due', label: 'Appraisal follow-ups' },
+  { id: 'appraisal_stage_changed', label: 'Appraisal stages' },
+  { id: 'listing_milestone_overdue', label: 'Listing milestones' },
+  { id: 'vendor_report_due', label: 'Vendor reports due' },
+  { id: 'vendor_update_overdue', label: 'Vendor updates overdue' },
+  { id: 'inspection_scheduled', label: 'Inspections' },
+  { id: 'report_generated', label: 'Reports generated' },
+  { id: 'listing_health_stalling', label: 'Listing health' },
+  { id: 'new_buyer_match', label: 'Buyer matches' },
   { id: 'announcement', label: 'Announcements' },
   { id: 'integration', label: 'Integrations' },
   { id: 'automation', label: 'Automations' },
+  { id: 'job_progress', label: 'Jobs (legacy)' },
+  { id: 'warehouse_alert', label: 'Warehouse (legacy)' },
 ];
-
-const TYPE_META: Record<NotificationRow['type'], { label: string; className: string }> = {
-  job_progress: { label: 'Job', className: 'bg-blue-500/15 text-blue-300 border-blue-500/30' },
-  warehouse_alert: { label: 'Warehouse', className: 'bg-amber-500/15 text-amber-300 border-amber-500/30' },
-  announcement: { label: 'Announcement', className: 'bg-accent-gold/15 text-accent-gold border-accent-gold/30' },
-  integration: { label: 'Integration', className: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' },
-  automation: { label: 'Automation', className: 'bg-violet-500/15 text-violet-300 border-violet-500/30' },
-};
 
 function formatTime(iso: string): string {
   const d = new Date(iso);
@@ -134,6 +152,10 @@ export default function NotificationsCenter({ orgId }: { orgId: string }) {
     if (!n.readAt) {
       await markOneRead(n.id);
     }
+    if (n.deepLink) {
+      router.push(n.deepLink);
+      return;
+    }
     if (n.jobId) {
       router.push(`/jobs/${n.jobId}`);
       return;
@@ -164,7 +186,14 @@ export default function NotificationsCenter({ orgId }: { orgId: string }) {
         if (statusFilter === 'unread' && item.readAt) return false;
         if (statusFilter === 'read' && !item.readAt) return false;
         if (typeFilter !== 'all' && item.type !== typeFilter) return false;
-        if (term && !item.message.toLowerCase().includes(term)) return false;
+        if (
+          term &&
+          !(
+            item.message.toLowerCase().includes(term) ||
+            (item.title ?? '').toLowerCase().includes(term) ||
+            (item.body ?? '').toLowerCase().includes(term)
+          )
+        ) return false;
         return true;
       })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -238,7 +267,13 @@ export default function NotificationsCenter({ orgId }: { orgId: string }) {
       ) : (
         <div className="space-y-3">
           {filteredItems.map((n) => {
-            const meta = TYPE_META[n.type];
+            const meta = {
+              label: NOTIFICATION_TYPE_LABELS[n.type],
+              className: NOTIFICATION_TYPE_BADGES[n.type],
+            };
+            const severityBadge = n.severity ? NOTIFICATION_SEVERITY_BADGES[n.severity] : null;
+            const title = n.title ?? n.message;
+            const body = n.body ?? (n.title ? n.message : null);
             return (
               <div
                 key={n.id}
@@ -253,6 +288,11 @@ export default function NotificationsCenter({ orgId }: { orgId: string }) {
                       <span className={cn('rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase', meta.className)}>
                         {meta.label}
                       </span>
+                      {severityBadge && (
+                        <span className={cn('rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase', severityBadge)}>
+                          {n.severity}
+                        </span>
+                      )}
                       {!n.readAt && (
                         <span className="rounded-full bg-accent-gold/15 px-2 py-0.5 text-[11px] font-semibold text-accent-gold">
                           Unread
@@ -264,8 +304,11 @@ export default function NotificationsCenter({ orgId }: { orgId: string }) {
                       onClick={() => void openNotification(n)}
                       className="text-left text-sm font-medium text-text-primary"
                     >
-                      {n.message}
+                      {title}
                     </button>
+                    {body && (
+                      <p className="text-xs text-text-secondary">{body}</p>
+                    )}
                     <p className="text-xs text-text-tertiary">{formatTime(n.createdAt)}</p>
                   </div>
                   <div className="flex items-center gap-2">

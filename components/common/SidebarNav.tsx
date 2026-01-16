@@ -35,8 +35,6 @@ export default function SidebarNav() {
     { href: '/reports', label: 'Reports' },
     { href: '/follow-ups', label: 'Follow-ups' },
     { href: '/schedule', label: 'Calendar' },
-    { href: '/notifications', label: config?.vocabulary?.notificationPlural ?? 'Notifications' },
-    { href: '/announcements', label: config?.vocabulary?.announcementPlural ?? 'Announcements' },
     {
       href: '/settings',
       label: 'Settings',

@@ -33,6 +33,7 @@ export async function loadListingReportContext(params: { orgId: string; listingI
       reportLastSentAt: listings.reportLastSentAt,
       reportNextDueAt: listings.reportNextDueAt,
       vendorContactId: listings.vendorContactId,
+      ownerUserId: listings.ownerUserId,
     })
     .from(listings)
     .where(and(eq(listings.orgId, params.orgId), eq(listings.id, params.listingId)))

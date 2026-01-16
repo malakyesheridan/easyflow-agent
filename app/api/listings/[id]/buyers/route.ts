@@ -7,6 +7,10 @@ import { requireOrgContext } from '@/lib/auth/require';
 import { listingBuyers } from '@/db/schema/listing_buyers';
 import { contacts } from '@/db/schema/contacts';
 import { recomputeCampaignHealth } from '@/lib/listings/recompute';
+import { listings } from '@/db/schema/listings';
+import { createNotificationBestEffort } from '@/lib/mutations/notifications';
+import { buildNotificationKey } from '@/lib/notifications/keys';
+import { buildListingLabel } from '@/lib/notifications/format';
 
 const statusValues = [
   'new',
@@ -111,6 +115,22 @@ export const POST = withRoute(async (req: Request, context?: { params?: { id?: s
   }
 
   const db = getDb();
+  const [listing] = await db
+    .select({
+      ownerUserId: listings.ownerUserId,
+      addressLine1: listings.addressLine1,
+      suburb: listings.suburb,
+    })
+    .from(listings)
+    .where(and(eq(listings.orgId, orgContext.data.orgId), eq(listings.id, listingId)))
+    .limit(1);
+
+  const [buyer] = await db
+    .select({ fullName: contacts.fullName })
+    .from(contacts)
+    .where(and(eq(contacts.orgId, orgContext.data.orgId), eq(contacts.id, parsed.data.buyerContactId)))
+    .limit(1);
+
   const [inserted] = await db
     .insert(listingBuyers)
     .values({
@@ -124,9 +144,27 @@ export const POST = withRoute(async (req: Request, context?: { params?: { id?: s
     })
     .returning({ id: listingBuyers.id });
 
+  const buyerId = inserted?.id ? String(inserted.id) : null;
+  const recipientUserId = listing?.ownerUserId ? String(listing.ownerUserId) : orgContext.data.actor.userId ?? null;
+  if (buyerId && recipientUserId && listing) {
+    const label = buildListingLabel(listing.addressLine1 ?? null, listing.suburb ?? null);
+    await createNotificationBestEffort({
+      orgId: orgContext.data.orgId,
+      type: 'new_buyer_match',
+      title: 'New buyer match',
+      body: `${buyer?.fullName ?? 'Buyer'} added to ${label}.`,
+      severity: 'info',
+      entityType: 'listing',
+      entityId: listingId,
+      deepLink: `/listings/${listingId}?tab=buyers`,
+      recipientUserId,
+      eventKey: buildNotificationKey({ type: 'new_buyer_match', entityId: buyerId, date: new Date() }),
+    });
+  }
+
   await recomputeCampaignHealth({ orgId: orgContext.data.orgId, listingId });
 
-  return ok({ id: inserted?.id ? String(inserted.id) : null });
+  return ok({ id: buyerId });
 });
 
 export const PATCH = withRoute(async (req: Request, context?: { params?: { id?: string } }) => {

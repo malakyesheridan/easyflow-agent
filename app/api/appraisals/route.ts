@@ -10,6 +10,9 @@ import { appraisalFollowups } from '@/db/schema/appraisal_followups';
 import { contacts } from '@/db/schema/contacts';
 import { users } from '@/db/schema/users';
 import { recomputeWinProbability } from '@/lib/appraisals/recompute';
+import { createNotificationBestEffort } from '@/lib/mutations/notifications';
+import { buildNotificationKey } from '@/lib/notifications/keys';
+import { formatShortDateTime } from '@/lib/notifications/format';
 
 const stageValues = [
   'booked',
@@ -68,6 +71,11 @@ function buildSearchFilter(search: string) {
 
 function toIso(value: Date | null) {
   return value ? value.toISOString() : null;
+}
+
+function isWithinNextHours(date: Date, hours: number, now: Date) {
+  const max = new Date(now.getTime() + hours * 60 * 60 * 1000);
+  return date >= now && date <= max;
 }
 
 export const GET = withRoute(async (req: Request) => {
@@ -266,6 +274,31 @@ export const POST = withRoute(async (req: Request) => {
   const appraisalId = inserted?.id ? String(inserted.id) : null;
   if (!appraisalId) {
     return err('INTERNAL_ERROR', 'Failed to create appraisal');
+  }
+
+  const [contact] = await db
+    .select({ fullName: contacts.fullName })
+    .from(contacts)
+    .where(and(eq(contacts.orgId, context.data.orgId), eq(contacts.id, parsed.data.contactId)))
+    .limit(1);
+
+  const now = new Date();
+  if (isWithinNextHours(appointmentAt, 24, now)) {
+    const recipientUserId = parsed.data.ownerUserId ?? context.data.actor.userId ?? null;
+    if (recipientUserId) {
+      await createNotificationBestEffort({
+        orgId: context.data.orgId,
+        type: 'appraisal_upcoming',
+        title: 'Appraisal upcoming',
+        body: `${contact?.fullName ?? 'Client'} - ${formatShortDateTime(appointmentAt)}`,
+        severity: 'warn',
+        entityType: 'appraisal',
+        entityId: appraisalId,
+        deepLink: `/appraisals/${appraisalId}`,
+        recipientUserId,
+        eventKey: buildNotificationKey({ type: 'appraisal_upcoming', entityId: appraisalId, date: appointmentAt }),
+      });
+    }
   }
 
   if (DEFAULT_CHECKLIST.length > 0) {

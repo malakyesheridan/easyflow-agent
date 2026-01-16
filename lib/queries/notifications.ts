@@ -37,11 +37,18 @@ export async function listNotifications(params: {
         id: notifications.id,
         orgId: notifications.orgId,
         type: notifications.type,
+        title: notifications.title,
+        body: notifications.body,
+        severity: notifications.severity,
+        entityType: notifications.entityType,
+        entityId: notifications.entityId,
+        deepLink: notifications.deepLink,
         jobId: notifications.jobId,
         eventKey: notifications.eventKey,
         recipientUserId: notifications.recipientUserId,
         message: notifications.message,
         readAt: notifications.readAt,
+        dismissedAt: notifications.dismissedAt,
         createdAt: notifications.createdAt,
       })
       .from(notifications)

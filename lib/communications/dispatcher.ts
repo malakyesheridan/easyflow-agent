@@ -1,6 +1,7 @@
 import { and, asc, eq, isNull, lte, or, sql } from 'drizzle-orm';
 import { commOutbox } from '@/db/schema/comm_outbox';
 import { notifications } from '@/db/schema/notifications';
+import type { Notification } from '@/db/schema/notifications';
 import { orgs } from '@/db/schema/orgs';
 import { logAuditEvent } from '@/lib/audit/logAuditEvent';
 import { renderEmailHtml } from '@/lib/communications/renderer';
@@ -13,11 +14,12 @@ const MAX_ATTEMPTS = 3;
 
 type OutboxRow = typeof commOutbox.$inferSelect;
 
-function buildNotificationType(eventKey: string): 'job_progress' | 'warehouse_alert' | 'announcement' | 'integration' {
-  if (eventKey.startsWith('announcement')) return 'announcement';
-  if (eventKey.startsWith('integration')) return 'integration';
-  if (eventKey.startsWith('material')) return 'warehouse_alert';
-  return 'job_progress';
+function buildNotificationType(eventKey: string): Notification['type'] | null {
+  const key = eventKey.toLowerCase();
+  if (key.startsWith('announcement')) return 'announcement';
+  if (key.startsWith('integration')) return 'integration';
+  if (key.startsWith('automation')) return 'automation';
+  return null;
 }
 
 function buildAttemptMetadata(row: OutboxRow, now: Date, error?: string | null, status?: string) {
@@ -152,16 +154,36 @@ async function dispatchRow(db: any, row: OutboxRow): Promise<void> {
 
   if (row.channel === 'in_app') {
     const notificationType = buildNotificationType(row.eventKey);
+    if (!notificationType) {
+      await db
+        .update(commOutbox)
+        .set({
+          status: 'sent',
+          error: null,
+          sentAt: now,
+          updatedAt: now,
+          metadata: buildAttemptMetadata(row, now, null, 'sent'),
+        })
+        .where(eq(commOutbox.id, row.id));
+      return;
+    }
+
     await db
       .insert(notifications)
       .values({
         orgId: row.orgId,
         type: notificationType,
+        title: row.subjectRendered ?? null,
+        body: row.bodyRendered,
+        severity: 'info',
+        entityType: 'none',
+        entityId: null,
+        deepLink: null,
         jobId: row.entityType === 'job' ? row.entityId : null,
         eventKey: `comm:${row.id}`,
         message: row.bodyRendered,
         recipientUserId: row.recipientUserId ?? null,
-      })
+      } as any)
       .onConflictDoNothing({ target: notifications.eventKey });
 
     await db

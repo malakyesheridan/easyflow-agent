@@ -1,6 +1,7 @@
 import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { getDb } from '@/lib/db';
 import { notifications } from '@/db/schema/notifications';
+import type { Notification } from '@/db/schema/notifications';
 import { ok, err, type Result } from '@/lib/result';
 import { logAuditEvent } from '@/lib/audit/logAuditEvent';
 
@@ -39,20 +40,40 @@ export async function markNotificationsRead(params: {
 
 export async function createNotificationBestEffort(params: {
   orgId: string;
-  type: 'job_progress' | 'warehouse_alert' | 'announcement' | 'integration' | 'automation';
-  message: string;
+  type: Notification['type'];
+  title?: string | null;
+  body?: string | null;
+  message?: string | null;
+  severity?: Notification['severity'] | null;
+  entityType?: Notification['entityType'] | null;
+  entityId?: string | null;
+  deepLink?: string | null;
   jobId?: string | null;
   eventKey?: string | null;
   recipientUserId?: string | null;
 }): Promise<void> {
   try {
+    const title = params.title?.trim() || null;
+    const body = params.body?.trim() || null;
+    const message = params.message?.trim() || body || title;
+    if (!message) return;
+
+    const severity = params.severity ?? 'info';
+    const entityType = params.entityType ?? 'none';
+
     const db = getDb();
     await db
       .insert(notifications)
       .values({
         orgId: params.orgId,
         type: params.type,
-        message: params.message,
+        title,
+        body,
+        severity,
+        entityType,
+        entityId: params.entityId ?? null,
+        deepLink: params.deepLink ?? null,
+        message,
         jobId: params.jobId ?? null,
         eventKey: params.eventKey ?? null,
         recipientUserId: params.recipientUserId ?? null,
@@ -68,7 +89,13 @@ export async function createNotificationBestEffort(params: {
       before: null,
       after: {
         type: params.type,
-        message: params.message,
+        title,
+        body,
+        severity,
+        entityType,
+        entityId: params.entityId ?? null,
+        deepLink: params.deepLink ?? null,
+        message,
         jobId: params.jobId ?? null,
         eventKey: params.eventKey ?? null,
       },

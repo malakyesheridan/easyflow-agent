@@ -8,6 +8,9 @@ import { appraisals } from '@/db/schema/appraisals';
 import { contacts } from '@/db/schema/contacts';
 import { users } from '@/db/schema/users';
 import { recomputeWinProbability } from '@/lib/appraisals/recompute';
+import { createNotificationBestEffort } from '@/lib/mutations/notifications';
+import { buildNotificationKey } from '@/lib/notifications/keys';
+import { formatShortDateTime } from '@/lib/notifications/format';
 
 const stageValues = [
   'booked',
@@ -53,6 +56,11 @@ const updateSchema = z.object({
 
 function toIso(value: Date | null) {
   return value ? value.toISOString() : null;
+}
+
+function isWithinNextHours(date: Date, hours: number, now: Date) {
+  const max = new Date(now.getTime() + hours * 60 * 60 * 1000);
+  return date >= now && date <= max;
 }
 
 async function loadAppraisal(orgId: string, appraisalId: string) {
@@ -172,6 +180,9 @@ export const PATCH = withRoute(async (req: Request, context?: { params?: { id?: 
   const orgContext = await requireOrgContext(req, parsed.data.orgId);
   if (!orgContext.ok) return orgContext;
 
+  const before = await loadAppraisal(orgContext.data.orgId, appraisalId);
+  if (!before) return err('NOT_FOUND', 'Appraisal not found');
+
   const payload: Record<string, unknown> = {
     updatedAt: new Date(),
   };
@@ -230,6 +241,47 @@ export const PATCH = withRoute(async (req: Request, context?: { params?: { id?: 
 
   const updated = await loadAppraisal(orgContext.data.orgId, appraisalId);
   if (!updated) return err('NOT_FOUND', 'Appraisal not found');
+
+  const recipientUserId = updated.owner?.id ?? orgContext.data.actor.userId ?? null;
+  const now = new Date();
+
+  if (parsed.data.stage && parsed.data.stage !== before.stage && recipientUserId) {
+    await createNotificationBestEffort({
+      orgId: orgContext.data.orgId,
+      type: 'appraisal_stage_changed',
+      title: 'Appraisal stage updated',
+      body: `${updated.contact.name ?? 'Client'} moved to ${parsed.data.stage.replace('_', ' ')}`,
+      severity: 'info',
+      entityType: 'appraisal',
+      entityId: appraisalId,
+      deepLink: `/appraisals/${appraisalId}`,
+      recipientUserId,
+      eventKey: buildNotificationKey({
+        type: 'appraisal_stage_changed',
+        entityId: appraisalId,
+        date: now,
+        suffix: parsed.data.stage,
+      }),
+    });
+  }
+
+  if (parsed.data.appointmentAt) {
+    const appointmentAt = new Date(parsed.data.appointmentAt);
+    if (!Number.isNaN(appointmentAt.getTime()) && isWithinNextHours(appointmentAt, 24, now) && recipientUserId) {
+      await createNotificationBestEffort({
+        orgId: orgContext.data.orgId,
+        type: 'appraisal_upcoming',
+        title: 'Appraisal upcoming',
+        body: `${updated.contact.name ?? 'Client'} - ${formatShortDateTime(appointmentAt)}`,
+        severity: 'warn',
+        entityType: 'appraisal',
+        entityId: appraisalId,
+        deepLink: `/appraisals/${appraisalId}`,
+        recipientUserId,
+        eventKey: buildNotificationKey({ type: 'appraisal_upcoming', entityId: appraisalId, date: appointmentAt }),
+      });
+    }
+  }
 
   return ok(updated);
 });

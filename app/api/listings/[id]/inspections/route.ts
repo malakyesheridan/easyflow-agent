@@ -5,7 +5,11 @@ import { err, ok } from '@/lib/result';
 import { getDb } from '@/lib/db';
 import { requireOrgContext } from '@/lib/auth/require';
 import { listingInspections } from '@/db/schema/listing_inspections';
+import { listings } from '@/db/schema/listings';
 import { recomputeCampaignHealth } from '@/lib/listings/recompute';
+import { createNotificationBestEffort } from '@/lib/mutations/notifications';
+import { buildNotificationKey } from '@/lib/notifications/keys';
+import { buildListingLabel, formatShortDateTime } from '@/lib/notifications/format';
 
 const inspectionTypes = ['open_home', 'private'] as const;
 
@@ -33,6 +37,10 @@ const deleteSchema = z.object({
 
 function toIso(value: Date | null) {
   return value ? value.toISOString() : null;
+}
+
+function buildInspectionTitle(type: typeof inspectionTypes[number]) {
+  return type === 'private' ? 'Private inspection scheduled' : 'Open home scheduled';
 }
 
 export const GET = withRoute(async (req: Request, context?: { params?: { id?: string } }) => {
@@ -89,6 +97,16 @@ export const POST = withRoute(async (req: Request, context?: { params?: { id?: s
   if (endsAt && Number.isNaN(endsAt.getTime())) return err('VALIDATION_ERROR', 'Invalid end time');
 
   const db = getDb();
+  const [listing] = await db
+    .select({
+      ownerUserId: listings.ownerUserId,
+      addressLine1: listings.addressLine1,
+      suburb: listings.suburb,
+    })
+    .from(listings)
+    .where(and(eq(listings.orgId, orgContext.data.orgId), eq(listings.id, listingId)))
+    .limit(1);
+
   const [inserted] = await db
     .insert(listingInspections)
     .values({
@@ -101,9 +119,27 @@ export const POST = withRoute(async (req: Request, context?: { params?: { id?: s
     })
     .returning({ id: listingInspections.id });
 
+  const inspectionId = inserted?.id ? String(inserted.id) : null;
+  const recipientUserId = listing?.ownerUserId ? String(listing.ownerUserId) : orgContext.data.actor.userId ?? null;
+  if (inspectionId && recipientUserId && listing) {
+    const label = buildListingLabel(listing.addressLine1 ?? null, listing.suburb ?? null);
+    await createNotificationBestEffort({
+      orgId: orgContext.data.orgId,
+      type: 'inspection_scheduled',
+      title: buildInspectionTitle(parsed.data.type ?? 'open_home'),
+      body: `${label} - ${formatShortDateTime(startsAt)}`,
+      severity: 'info',
+      entityType: 'listing',
+      entityId: listingId,
+      deepLink: `/listings/${listingId}?tab=inspections`,
+      recipientUserId,
+      eventKey: buildNotificationKey({ type: 'inspection_scheduled', entityId: inspectionId, date: startsAt }),
+    });
+  }
+
   await recomputeCampaignHealth({ orgId: orgContext.data.orgId, listingId });
 
-  return ok({ id: inserted?.id ? String(inserted.id) : null });
+  return ok({ id: inspectionId });
 });
 
 export const PATCH = withRoute(async (req: Request, context?: { params?: { id?: string } }) => {
@@ -134,10 +170,48 @@ export const PATCH = withRoute(async (req: Request, context?: { params?: { id?: 
   if (parsed.data.notes !== undefined) payload.notes = parsed.data.notes ?? null;
 
   const db = getDb();
+  const [inspection] = await db
+    .select({
+      type: listingInspections.type,
+      startsAt: listingInspections.startsAt,
+    })
+    .from(listingInspections)
+    .where(and(eq(listingInspections.orgId, orgContext.data.orgId), eq(listingInspections.id, parsed.data.inspectionId)))
+    .limit(1);
+  const [listing] = await db
+    .select({
+      ownerUserId: listings.ownerUserId,
+      addressLine1: listings.addressLine1,
+      suburb: listings.suburb,
+    })
+    .from(listings)
+    .where(and(eq(listings.orgId, orgContext.data.orgId), eq(listings.id, listingId)))
+    .limit(1);
+
   await db
     .update(listingInspections)
     .set(payload)
     .where(and(eq(listingInspections.orgId, orgContext.data.orgId), eq(listingInspections.id, parsed.data.inspectionId)));
+
+  const startDate = parsed.data.startsAt ? new Date(parsed.data.startsAt) : inspection?.startsAt ?? null;
+  const startsAt = startDate && !Number.isNaN(startDate.getTime()) ? startDate : null;
+  const inspectionType = parsed.data.type ?? inspection?.type ?? 'open_home';
+  const recipientUserId = listing?.ownerUserId ? String(listing.ownerUserId) : orgContext.data.actor.userId ?? null;
+  if (startsAt && recipientUserId && listing) {
+    const label = buildListingLabel(listing.addressLine1 ?? null, listing.suburb ?? null);
+    await createNotificationBestEffort({
+      orgId: orgContext.data.orgId,
+      type: 'inspection_scheduled',
+      title: buildInspectionTitle(inspectionType),
+      body: `${label} - ${formatShortDateTime(startsAt)}`,
+      severity: 'info',
+      entityType: 'listing',
+      entityId: listingId,
+      deepLink: `/listings/${listingId}?tab=inspections`,
+      recipientUserId,
+      eventKey: buildNotificationKey({ type: 'inspection_scheduled', entityId: parsed.data.inspectionId, date: startsAt }),
+    });
+  }
 
   await recomputeCampaignHealth({ orgId: orgContext.data.orgId, listingId });
 

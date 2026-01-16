@@ -2,9 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
 import {
-  Bell,
   CalendarDays,
   LayoutDashboard,
   ListChecks,
@@ -12,7 +10,6 @@ import {
   Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useOrgConfig } from '@/hooks/useOrgConfig';
 
 type NavItem = {
   href: string;
@@ -22,9 +19,6 @@ type NavItem = {
 
 export default function MobileNav() {
   const pathname = usePathname();
-  const { config } = useOrgConfig();
-  const orgId = config?.orgId ?? '';
-  const [unreadCount, setUnreadCount] = useState<number | null>(null);
 
   const navItems: NavItem[] = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -32,29 +26,7 @@ export default function MobileNav() {
     { href: '/contacts', label: 'Contacts', icon: Users },
     { href: '/follow-ups', label: 'Follow-ups', icon: ListChecks },
     { href: '/schedule', label: 'Calendar', icon: CalendarDays },
-    { href: '/notifications', label: config?.vocabulary?.notificationPlural ?? 'Notifications', icon: Bell },
   ];
-
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      try {
-        if (!orgId) return;
-        const res = await fetch(`/api/notifications?orgId=${orgId}&unreadCountOnly=true`);
-        const json = await res.json();
-        if (cancelled) return;
-        setUnreadCount(res.ok && json.ok ? Number(json.data?.unreadCount ?? 0) : 0);
-      } catch {
-        if (!cancelled) setUnreadCount(0);
-      }
-    };
-    void load();
-    const id = setInterval(load, 30000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [orgId]);
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-border-subtle bg-bg-section/95 backdrop-blur">
@@ -72,14 +44,7 @@ export default function MobileNav() {
               )}
               aria-current={isActive ? 'page' : undefined}
             >
-              <div className="relative">
-                <Icon className="h-5 w-5" />
-                {item.href === '/notifications' && unreadCount !== null && unreadCount > 0 && (
-                  <span className="absolute -right-2 -top-1 min-w-4 rounded-full bg-accent-gold px-1 text-[10px] font-semibold text-bg-base">
-                    {unreadCount}
-                  </span>
-                )}
-              </div>
+              <Icon className="h-5 w-5" />
               <span className="truncate">{item.label}</span>
             </Link>
           );

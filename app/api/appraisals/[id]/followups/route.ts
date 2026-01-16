@@ -7,6 +7,10 @@ import { requireOrgContext } from '@/lib/auth/require';
 import { appraisals } from '@/db/schema/appraisals';
 import { appraisalFollowups } from '@/db/schema/appraisal_followups';
 import { recomputeWinProbability } from '@/lib/appraisals/recompute';
+import { contacts } from '@/db/schema/contacts';
+import { createNotificationBestEffort } from '@/lib/mutations/notifications';
+import { buildNotificationKey } from '@/lib/notifications/keys';
+import { formatShortDate } from '@/lib/notifications/format';
 
 const followupTypes = [
   'followup_same_day',
@@ -34,6 +38,42 @@ const updateSchema = z.object({
 
 function toIso(value: Date | null) {
   return value ? value.toISOString() : null;
+}
+
+function isWithinNextHours(date: Date, hours: number, now: Date) {
+  const max = new Date(now.getTime() + hours * 60 * 60 * 1000);
+  return date <= max;
+}
+
+async function notifyFollowupDue(params: {
+  orgId: string;
+  recipientUserId: string | null;
+  appraisalId: string;
+  followupId: string;
+  contactName: string | null;
+  title: string;
+  dueAt: Date;
+  now: Date;
+}) {
+  if (!params.recipientUserId) return;
+  if (!isWithinNextHours(params.dueAt, 24, params.now)) return;
+  const isOverdue = params.dueAt.getTime() < params.now.getTime();
+  await createNotificationBestEffort({
+    orgId: params.orgId,
+    type: 'appraisal_followup_due',
+    title: 'Appraisal follow-up due',
+    body: `${params.contactName ?? 'Client'} - ${params.title} due ${formatShortDate(params.dueAt)}`,
+    severity: isOverdue ? 'critical' : 'warn',
+    entityType: 'appraisal',
+    entityId: params.appraisalId,
+    deepLink: `/appraisals/${params.appraisalId}`,
+    recipientUserId: params.recipientUserId,
+    eventKey: buildNotificationKey({
+      type: 'appraisal_followup_due',
+      entityId: params.followupId,
+      date: params.dueAt,
+    }),
+  });
 }
 
 export const GET = withRoute(async (req: Request, context?: { params?: { id?: string } }) => {
@@ -96,8 +136,11 @@ export const POST = withRoute(async (req: Request, context?: { params?: { id?: s
       appointmentAt: appraisals.appointmentAt,
       attendedAt: appraisals.attendedAt,
       contactId: appraisals.contactId,
+      ownerUserId: appraisals.ownerUserId,
+      contactName: contacts.fullName,
     })
     .from(appraisals)
+    .innerJoin(contacts, eq(appraisals.contactId, contacts.id))
     .where(and(eq(appraisals.orgId, orgContext.data.orgId), eq(appraisals.id, appraisalId)))
     .limit(1);
 
@@ -139,7 +182,28 @@ export const POST = withRoute(async (req: Request, context?: { params?: { id?: s
       });
 
     if (rowsToInsert.length > 0) {
-      await db.insert(appraisalFollowups).values(rowsToInsert);
+      const inserted = await db
+        .insert(appraisalFollowups)
+        .values(rowsToInsert)
+        .returning({
+          id: appraisalFollowups.id,
+          dueAt: appraisalFollowups.dueAt,
+          title: appraisalFollowups.title,
+        });
+
+      const now = new Date();
+      for (const row of inserted) {
+        await notifyFollowupDue({
+          orgId: orgContext.data.orgId,
+          recipientUserId: appraisal.ownerUserId ? String(appraisal.ownerUserId) : orgContext.data.actor.userId ?? null,
+          appraisalId,
+          followupId: String(row.id),
+          contactName: appraisal.contactName ?? null,
+          title: row.title,
+          dueAt: row.dueAt,
+          now,
+        });
+      }
     }
 
     await recomputeWinProbability({ orgId: orgContext.data.orgId, appraisalId });
@@ -155,15 +219,35 @@ export const POST = withRoute(async (req: Request, context?: { params?: { id?: s
     return err('VALIDATION_ERROR', 'Invalid due date');
   }
 
-  await db.insert(appraisalFollowups).values({
-    orgId: orgContext.data.orgId,
-    appraisalId,
-    contactId: appraisal.contactId,
-    type: parsed.data.type ?? 'custom',
-    title: parsed.data.title,
-    dueAt,
-    updatedAt: new Date(),
-  });
+  const [customRow] = await db
+    .insert(appraisalFollowups)
+    .values({
+      orgId: orgContext.data.orgId,
+      appraisalId,
+      contactId: appraisal.contactId,
+      type: parsed.data.type ?? 'custom',
+      title: parsed.data.title,
+      dueAt,
+      updatedAt: new Date(),
+    })
+    .returning({
+      id: appraisalFollowups.id,
+      dueAt: appraisalFollowups.dueAt,
+      title: appraisalFollowups.title,
+    });
+
+  if (customRow) {
+    await notifyFollowupDue({
+      orgId: orgContext.data.orgId,
+      recipientUserId: appraisal.ownerUserId ? String(appraisal.ownerUserId) : orgContext.data.actor.userId ?? null,
+      appraisalId,
+      followupId: String(customRow.id),
+      contactName: appraisal.contactName ?? null,
+      title: customRow.title,
+      dueAt: customRow.dueAt,
+      now: new Date(),
+    });
+  }
 
   await recomputeWinProbability({ orgId: orgContext.data.orgId, appraisalId });
   return ok({ created: 1 });
@@ -206,6 +290,32 @@ export const PATCH = withRoute(async (req: Request, context?: { params?: { id?: 
     .where(and(eq(appraisalFollowups.orgId, orgContext.data.orgId), eq(appraisalFollowups.id, parsed.data.followupId)));
 
   await recomputeWinProbability({ orgId: orgContext.data.orgId, appraisalId });
+
+  if (parsed.data.dueAt) {
+    const dueAt = new Date(parsed.data.dueAt);
+    if (!Number.isNaN(dueAt.getTime())) {
+      const [appraisalRow] = await db
+        .select({
+          ownerUserId: appraisals.ownerUserId,
+          contactName: contacts.fullName,
+        })
+        .from(appraisals)
+        .innerJoin(contacts, eq(appraisals.contactId, contacts.id))
+        .where(and(eq(appraisals.orgId, orgContext.data.orgId), eq(appraisals.id, appraisalId)))
+        .limit(1);
+
+      await notifyFollowupDue({
+        orgId: orgContext.data.orgId,
+        recipientUserId: appraisalRow?.ownerUserId ? String(appraisalRow.ownerUserId) : orgContext.data.actor.userId ?? null,
+        appraisalId,
+        followupId: parsed.data.followupId,
+        contactName: appraisalRow?.contactName ?? null,
+        title: parsed.data.title ?? 'Follow-up',
+        dueAt,
+        now: new Date(),
+      });
+    }
+  }
 
   return ok({ updated: true });
 });

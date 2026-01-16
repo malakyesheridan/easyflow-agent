@@ -17,6 +17,9 @@ import { computeNextDueAt } from '@/lib/reports/cadence';
 import { getBaseUrl } from '@/lib/url';
 import { buildVendorReportPayload } from '@/lib/reports/payload';
 import { loadListingReportContext } from '@/lib/reports/context';
+import { createNotificationBestEffort } from '@/lib/mutations/notifications';
+import { buildNotificationKey } from '@/lib/notifications/keys';
+import { buildListingLabel } from '@/lib/notifications/format';
 
 const createSchema = z.object({
   orgId: z.string().trim().min(1),
@@ -184,6 +187,24 @@ export const POST = withRoute(async (req: Request, context?: { params?: { id?: s
       createdByUserId: orgContext.data.actor.userId ?? null,
     })
     .returning({ id: listingReports.id });
+
+  const reportId = inserted?.id ? String(inserted.id) : null;
+  const recipientUserId = listing.ownerUserId ? String(listing.ownerUserId) : orgContext.data.actor.userId ?? null;
+  if (reportId && recipientUserId) {
+    const label = buildListingLabel(listing.addressLine1 ?? null, listing.suburb ?? null);
+    await createNotificationBestEffort({
+      orgId: orgContext.data.orgId,
+      type: 'report_generated',
+      title: 'Vendor report generated',
+      body: `Report for ${label} is ready to share.`,
+      severity: 'info',
+      entityType: 'report',
+      entityId: reportId,
+      deepLink: `/listings/${listingId}?tab=reports`,
+      recipientUserId,
+      eventKey: buildNotificationKey({ type: 'report_generated', entityId: reportId, date: now }),
+    });
+  }
 
   await db.insert(listingVendorComms).values({
     orgId: orgContext.data.orgId,
