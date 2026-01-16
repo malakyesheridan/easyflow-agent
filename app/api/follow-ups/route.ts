@@ -88,6 +88,19 @@ function endOfDay(date: Date) {
   return value;
 }
 
+function toDate(value: Date | string | null | undefined) {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
+function toISOString(value: Date | string | null | undefined) {
+  const date = toDate(value);
+  return date ? date.toISOString() : null;
+}
+
 function isSameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
@@ -401,8 +414,8 @@ export const GET = withRoute(async (req: Request) => {
         role: row.role,
         temperature: row.temperature,
         sellerStage: row.sellerStage ?? null,
-        lastTouchAt: row.lastTouchAt ?? null,
-        nextTouchAt: row.nextTouchAt ?? null,
+        lastTouchAt: toDate(row.lastTouchAt),
+        nextTouchAt: toDate(row.nextTouchAt),
         tags: tagsForContact,
       },
       touchCount,
@@ -413,7 +426,7 @@ export const GET = withRoute(async (req: Request) => {
       source_type: 'contact_followup',
       source_id: contactId,
       title: `Follow up: ${row.fullName}`,
-      due_at: row.nextTouchAt ? row.nextTouchAt.toISOString() : null,
+      due_at: toISOString(row.nextTouchAt),
       category: 'prospecting',
       priority_score: 0,
       priority_label: 'Normal',
@@ -468,7 +481,7 @@ export const GET = withRoute(async (req: Request) => {
       source_type: 'appraisal_checklist_item',
       source_id: sourceId,
       title: `Appraisal prep: ${row.title}`,
-      due_at: row.dueAt ? row.dueAt.toISOString() : null,
+      due_at: toISOString(row.dueAt),
       category: 'appraisals',
       priority_score: 0,
       priority_label: 'Normal',
@@ -519,7 +532,7 @@ export const GET = withRoute(async (req: Request) => {
       source_type: 'appraisal_followup',
       source_id: sourceId,
       title: `Appraisal follow-up: ${row.title}`,
-      due_at: row.dueAt ? row.dueAt.toISOString() : null,
+      due_at: toISOString(row.dueAt),
       category: 'appraisals',
       priority_score: 0,
       priority_label: 'Normal',
@@ -575,7 +588,7 @@ export const GET = withRoute(async (req: Request) => {
       source_type: 'listing_checklist_item',
       source_id: sourceId,
       title: `Listing task: ${row.title}`,
-      due_at: row.dueAt ? row.dueAt.toISOString() : null,
+      due_at: toISOString(row.dueAt),
       category: 'listings',
       priority_score: 0,
       priority_label: 'Normal',
@@ -632,7 +645,7 @@ export const GET = withRoute(async (req: Request) => {
       source_type: 'listing_milestone',
       source_id: sourceId,
       title: `Milestone due: ${row.name}`,
-      due_at: row.targetDueAt ? row.targetDueAt.toISOString() : null,
+      due_at: toISOString(row.targetDueAt),
       category: 'listings',
       priority_score: 0,
       priority_label: 'Normal',
@@ -687,7 +700,7 @@ export const GET = withRoute(async (req: Request) => {
       source_type: 'buyer_followup',
       source_id: sourceId,
       title: `Buyer follow-up: ${row.buyerName ?? 'Buyer'} re ${label}`,
-      due_at: row.nextFollowUpAt ? row.nextFollowUpAt.toISOString() : null,
+      due_at: toISOString(row.nextFollowUpAt),
       category: 'buyer_followups',
       priority_score: 0,
       priority_label: 'Normal',
@@ -739,7 +752,7 @@ export const GET = withRoute(async (req: Request) => {
       source_type: 'vendor_report_due',
       source_id: listingId,
       title: `Send vendor report: ${label}`,
-      due_at: row.reportNextDueAt ? row.reportNextDueAt.toISOString() : null,
+      due_at: toISOString(row.reportNextDueAt),
       category: 'vendor_reporting',
       priority_score: 0,
       priority_label: 'Normal',
@@ -781,14 +794,14 @@ export const GET = withRoute(async (req: Request) => {
     .where(eq(listingVendorComms.orgId, context.data.orgId))
     .groupBy(listingVendorComms.listingId);
 
-  const commMap = new Map(commRows.map((row) => [String(row.listingId), row.lastOccurredAt]));
+  const commMap = new Map(commRows.map((row) => [String(row.listingId), toDate(row.lastOccurredAt)]));
 
   listingRowsForComms.forEach((row) => {
     const listingId = String(row.id);
     if (reportDueListingIds.has(listingId)) return;
     if (ownerFilter === 'me' && actorUserId && row.ownerUserId && row.ownerUserId !== actorUserId) return;
     const lastComm = commMap.get(listingId) ?? null;
-    const baseDate = lastComm ?? row.listedAt ?? row.createdAt ?? null;
+    const baseDate = lastComm ?? toDate(row.listedAt) ?? toDate(row.createdAt) ?? null;
     if (!baseDate) return;
     const daysSince = (now.getTime() - baseDate.getTime()) / (24 * 60 * 60 * 1000);
     if (daysSince <= 7) return;
@@ -799,7 +812,7 @@ export const GET = withRoute(async (req: Request) => {
       source_type: 'vendor_comm_overdue',
       source_id: listingId,
       title: `Vendor update overdue: ${label}`,
-      due_at: baseDate ? baseDate.toISOString() : null,
+      due_at: toISOString(baseDate),
       category: 'vendor_reporting',
       priority_score: 0,
       priority_label: 'Normal',
