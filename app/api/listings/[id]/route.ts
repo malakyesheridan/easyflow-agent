@@ -67,6 +67,13 @@ async function loadListing(params: { orgId: string; listingId: string }) {
       vendorName: contacts.fullName,
       vendorEmail: contacts.email,
       vendorPhone: contacts.phone,
+      reportCadenceEnabled: listings.reportCadenceEnabled,
+      reportCadenceType: listings.reportCadenceType,
+      reportCadenceIntervalDays: listings.reportCadenceIntervalDays,
+      reportCadenceDayOfWeek: listings.reportCadenceDayOfWeek,
+      reportNextDueAt: listings.reportNextDueAt,
+      reportLastSentAt: listings.reportLastSentAt,
+      reportTemplateId: listings.reportTemplateId,
       ownerName: users.name,
       ownerEmail: users.email,
       createdAt: listings.createdAt,
@@ -156,6 +163,15 @@ async function loadListing(params: { orgId: string; listingId: string }) {
     owner: row.ownerUserId
       ? { id: String(row.ownerUserId), name: row.ownerName ?? null, email: row.ownerEmail ?? null }
       : null,
+    reportSettings: {
+      cadenceEnabled: row.reportCadenceEnabled,
+      cadenceType: row.reportCadenceType,
+      cadenceIntervalDays: row.reportCadenceIntervalDays,
+      cadenceDayOfWeek: row.reportCadenceDayOfWeek,
+      nextDueAt: toIso(row.reportNextDueAt ?? null),
+      lastSentAt: toIso(row.reportLastSentAt ?? null),
+      templateId: row.reportTemplateId ? String(row.reportTemplateId) : null,
+    },
     createdAt: toIso(row.createdAt),
     updatedAt: toIso(row.updatedAt),
   };

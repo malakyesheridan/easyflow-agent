@@ -194,6 +194,7 @@ export const PATCH = withRoute(async (req: Request, context?: { params?: { id?: 
   if (parsed.data.priceExpectationMax !== undefined) payload.priceExpectationMax = parsed.data.priceExpectationMax ?? null;
   if (parsed.data.decisionMakersPresent !== undefined) payload.decisionMakersPresent = parsed.data.decisionMakersPresent;
   if (parsed.data.objections !== undefined) payload.objections = parsed.data.objections ?? null;
+  // TODO: When appraisal outcome is won, auto-create a listing and apply report cadence defaults.
   if (parsed.data.outcomeStatus !== undefined) payload.outcomeStatus = parsed.data.outcomeStatus;
   if (parsed.data.lostReason !== undefined) payload.lostReason = parsed.data.lostReason ?? null;
   if (parsed.data.lostNotes !== undefined) payload.lostNotes = parsed.data.lostNotes ?? null;

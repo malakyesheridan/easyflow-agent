@@ -58,6 +58,7 @@ export * from './listing_buyers';
 export * from './listing_inspections';
 export * from './listing_vendor_comms';
 export * from './listing_reports';
+export * from './contact_reporting_preferences';
 export * from './contacts';
 export * from './tags';
 export * from './contact_tags';

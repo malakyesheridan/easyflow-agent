@@ -13,6 +13,7 @@ import {
 import { orgs } from './orgs';
 import { users } from './users';
 import { contacts } from './contacts';
+import { reportTemplates, reportCadenceTypeEnum } from './report_templates';
 
 export const listingStatusEnum = pgEnum('listing_status', [
   'draft',
@@ -47,6 +48,13 @@ export const listings = pgTable(
     cars: integer('cars'),
     campaignHealthScore: integer('campaign_health_score'),
     campaignHealthReasons: jsonb('campaign_health_reasons'),
+    reportCadenceEnabled: boolean('report_cadence_enabled').notNull().default(true),
+    reportCadenceType: reportCadenceTypeEnum('report_cadence_type').notNull().default('weekly'),
+    reportCadenceIntervalDays: integer('report_cadence_interval_days'),
+    reportCadenceDayOfWeek: integer('report_cadence_day_of_week'),
+    reportNextDueAt: timestamp('report_next_due_at', { withTimezone: true }),
+    reportLastSentAt: timestamp('report_last_sent_at', { withTimezone: true }),
+    reportTemplateId: uuid('report_template_id').references(() => reportTemplates.id, { onDelete: 'set null' }),
     isDemo: boolean('is_demo').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

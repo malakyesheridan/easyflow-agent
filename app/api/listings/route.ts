@@ -1,10 +1,12 @@
 import { z } from 'zod';
-import { and, eq, ilike, inArray, or } from 'drizzle-orm';
+import { and, desc, eq, ilike, inArray, or } from 'drizzle-orm';
 import { withRoute } from '@/lib/api/withRoute';
 import { err, ok } from '@/lib/result';
 import { getDb } from '@/lib/db';
 import { requireOrgContext } from '@/lib/auth/require';
 import { listings } from '@/db/schema/listings';
+import { reportTemplates } from '@/db/schema/report_templates';
+import { contactReportingPreferences } from '@/db/schema/contact_reporting_preferences';
 import { listingMilestones } from '@/db/schema/listing_milestones';
 import { listingEnquiries } from '@/db/schema/listing_enquiries';
 import { listingInspections } from '@/db/schema/listing_inspections';
@@ -14,6 +16,7 @@ import { listingChecklistItems } from '@/db/schema/listing_checklist_items';
 import { contacts } from '@/db/schema/contacts';
 import { users } from '@/db/schema/users';
 import { recomputeCampaignHealth } from '@/lib/listings/recompute';
+import { computeNextDueAt } from '@/lib/reports/cadence';
 
 const statusValues = ['draft', 'active', 'under_offer', 'sold', 'withdrawn'] as const;
 
@@ -289,6 +292,24 @@ export const POST = withRoute(async (req: Request) => {
   }
 
   const db = getDb();
+  const [template] = await db
+    .select()
+    .from(reportTemplates)
+    .where(and(eq(reportTemplates.orgId, context.data.orgId), eq(reportTemplates.templateType, 'vendor')))
+    .orderBy(desc(reportTemplates.isDefault), desc(reportTemplates.createdAt))
+    .limit(1);
+
+  const [contactPreference] = await db
+    .select()
+    .from(contactReportingPreferences)
+    .where(and(eq(contactReportingPreferences.orgId, context.data.orgId), eq(contactReportingPreferences.contactId, parsed.data.vendorContactId)))
+    .limit(1);
+
+  const cadenceType = (contactPreference?.cadencePreference && contactPreference.cadencePreference !== 'none')
+    ? contactPreference.cadencePreference
+    : template?.cadenceDefaultType ?? 'weekly';
+  const cadenceEnabled = contactPreference?.cadencePreference !== 'none';
+
   const [inserted] = await db
     .insert(listings)
     .values({
@@ -305,6 +326,11 @@ export const POST = withRoute(async (req: Request) => {
       beds: parsed.data.beds ?? null,
       baths: parsed.data.baths ?? null,
       cars: parsed.data.cars ?? null,
+      reportTemplateId: template?.id ?? null,
+      reportCadenceEnabled: cadenceEnabled,
+      reportCadenceType: cadenceType,
+      reportCadenceIntervalDays: template?.cadenceDefaultIntervalDays ?? null,
+      reportCadenceDayOfWeek: template?.cadenceDefaultDayOfWeek ?? null,
       updatedAt: new Date(),
     })
     .returning({ id: listings.id });
@@ -312,6 +338,23 @@ export const POST = withRoute(async (req: Request) => {
   const listingId = inserted?.id ? String(inserted.id) : null;
   if (!listingId) {
     return err('INTERNAL_ERROR', 'Failed to create listing');
+  }
+
+  if (cadenceEnabled) {
+    const baseDate = listedAt ?? new Date();
+    const nextDue = computeNextDueAt({
+      baseDate,
+      cadence: {
+        cadenceType,
+        intervalDays: template?.cadenceDefaultIntervalDays ?? null,
+        dayOfWeek: template?.cadenceDefaultDayOfWeek ?? null,
+      },
+    });
+
+    await db
+      .update(listings)
+      .set({ reportNextDueAt: nextDue ?? null, updatedAt: new Date() })
+      .where(and(eq(listings.orgId, context.data.orgId), eq(listings.id, listingId)));
   }
 
   if (DEFAULT_MILESTONES.length > 0) {

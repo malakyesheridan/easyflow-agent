@@ -50,6 +50,12 @@ type Activity = {
   occurredAt: string | null;
 };
 
+type ReportingPreferences = {
+  cadencePreference: string;
+  channelPreference: string | null;
+  additionalRecipients: string[];
+};
+
 type DraftState = {
   role: string;
   sellerStage: string;
@@ -87,6 +93,10 @@ function parseTagsInput(value: string) {
   return value.split(',').map((tag) => tag.trim()).filter(Boolean);
 }
 
+function parseRecipientsInput(value: string) {
+  return value.split(',').map((recipient) => recipient.trim()).filter(Boolean);
+}
+
 export default function ContactDetailView({ contactId }: { contactId: string }) {
   const { config } = useOrgConfig();
   const orgId = config?.orgId ?? '';
@@ -98,6 +108,7 @@ export default function ContactDetailView({ contactId }: { contactId: string }) 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [reportingSaving, setReportingSaving] = useState(false);
 
   const [noteContent, setNoteContent] = useState('');
   const [callContent, setCallContent] = useState('');
@@ -114,6 +125,12 @@ export default function ContactDetailView({ contactId }: { contactId: string }) 
     nextTouchAt: '',
     doNotContact: false,
     marketingOptIn: false,
+  });
+
+  const [reportingDraft, setReportingDraft] = useState({
+    cadencePreference: 'none',
+    channelPreference: 'share_link',
+    additionalRecipients: '',
   });
 
   useEffect(() => {
@@ -159,6 +176,36 @@ export default function ContactDetailView({ contactId }: { contactId: string }) 
     };
 
     void loadActivities();
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId, contactId]);
+
+  useEffect(() => {
+    if (!orgId || !contactId) return;
+    let cancelled = false;
+
+    const loadReportingPreferences = async () => {
+      try {
+        const res = await fetch(`/api/contacts/${contactId}/reporting-preferences?orgId=${orgId}`, { cache: 'no-store' });
+        const json = await res.json();
+        if (!res.ok || !json.ok) throw new Error('Failed to load reporting preferences');
+        if (!cancelled) {
+          const prefs = json.data as ReportingPreferences;
+          setReportingDraft({
+            cadencePreference: prefs.cadencePreference ?? 'none',
+            channelPreference: prefs.channelPreference ?? 'share_link',
+            additionalRecipients: (prefs.additionalRecipients ?? []).join(', '),
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          setReportingDraft({ cadencePreference: 'none', channelPreference: 'share_link', additionalRecipients: '' });
+        }
+      }
+    };
+
+    void loadReportingPreferences();
     return () => {
       cancelled = true;
     };
@@ -215,6 +262,9 @@ export default function ContactDetailView({ contactId }: { contactId: string }) 
   }, [contact]);
 
   const tagOptions = useMemo(() => tags.map((tag) => tag.name), [tags]);
+  const showReportingPreferences = contact?.role !== 'buyer';
+  const showDoNotContactWarning = contact?.doNotContact
+    && (reportingDraft.channelPreference === 'email' || reportingDraft.channelPreference === 'sms');
 
   const saveContact = async (overrides?: Partial<DraftState>) => {
     if (!orgId || !contactId) return;
@@ -251,6 +301,37 @@ export default function ContactDetailView({ contactId }: { contactId: string }) 
       setError(err instanceof Error ? err.message : 'Failed to update contact');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const saveReportingPreferences = async () => {
+    if (!orgId || !contactId) return;
+    setReportingSaving(true);
+    setError(null);
+    try {
+      const recipients = parseRecipientsInput(reportingDraft.additionalRecipients);
+      const res = await fetch(`/api/contacts/${contactId}/reporting-preferences`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orgId,
+          cadencePreference: reportingDraft.cadencePreference,
+          channelPreference: reportingDraft.channelPreference || null,
+          additionalRecipients: recipients,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json?.error?.message || 'Failed to update reporting preferences');
+      const prefs = json.data as ReportingPreferences;
+      setReportingDraft({
+        cadencePreference: prefs.cadencePreference ?? reportingDraft.cadencePreference,
+        channelPreference: prefs.channelPreference ?? reportingDraft.channelPreference,
+        additionalRecipients: (prefs.additionalRecipients ?? []).join(', '),
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update reporting preferences');
+    } finally {
+      setReportingSaving(false);
     }
   };
 
@@ -467,6 +548,54 @@ export default function ContactDetailView({ contactId }: { contactId: string }) 
           </Button>
         </GlassCard>
       </div>
+
+      <GlassCard className="space-y-4">
+        <SectionHeader title="Vendor reporting preferences" subtitle="Defaults applied when this contact is the vendor." />
+        {!showReportingPreferences ? (
+          <p className="text-sm text-text-secondary">
+            Reporting preferences are available for seller contacts. Update the role to Seller or Both to enable.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <Select
+              label="Preferred cadence"
+              value={reportingDraft.cadencePreference}
+              onChange={(event) => setReportingDraft((prev) => ({ ...prev, cadencePreference: event.target.value }))}
+            >
+              <option value="weekly">Weekly</option>
+              <option value="fortnightly">Fortnightly</option>
+              <option value="monthly">Monthly</option>
+              <option value="custom">Custom</option>
+              <option value="none">None</option>
+            </Select>
+            <Select
+              label="Preferred channel"
+              value={reportingDraft.channelPreference}
+              onChange={(event) => setReportingDraft((prev) => ({ ...prev, channelPreference: event.target.value }))}
+            >
+              <option value="share_link">Share link</option>
+              <option value="email">Email (logged)</option>
+              <option value="sms">SMS (logged)</option>
+            </Select>
+            <Input
+              label="Additional recipients"
+              value={reportingDraft.additionalRecipients}
+              onChange={(event) => setReportingDraft((prev) => ({ ...prev, additionalRecipients: event.target.value }))}
+              placeholder="assistant@vendor.com, partner@vendor.com"
+            />
+            <div className="flex items-end">
+              <Button variant="secondary" onClick={saveReportingPreferences} disabled={reportingSaving}>
+                {reportingSaving ? 'Saving...' : 'Save preferences'}
+              </Button>
+            </div>
+          </div>
+        )}
+        {showDoNotContactWarning && (
+          <p className="text-xs text-red-400">
+            This contact is marked do-not-contact. Email/SMS delivery should be avoided.
+          </p>
+        )}
+      </GlassCard>
 
       <GlassCard className="space-y-3">
         <SectionHeader title="Timeline" />

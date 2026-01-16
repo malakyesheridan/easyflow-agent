@@ -2,8 +2,15 @@ import { pgTable, uuid, text, timestamp, index, uniqueIndex, jsonb, pgEnum } fro
 import { orgs } from './orgs';
 import { listings } from './listings';
 import { users } from './users';
+import { reportTemplates } from './report_templates';
 
 export const listingReportTypeEnum = pgEnum('listing_report_type', ['vendor']);
+export const listingReportDeliveryEnum = pgEnum('listing_report_delivery_method', [
+  'share_link',
+  'email',
+  'sms',
+  'logged',
+]);
 
 export const listingReports = pgTable(
   'listing_reports',
@@ -14,6 +21,8 @@ export const listingReports = pgTable(
     type: listingReportTypeEnum('type').notNull().default('vendor'),
     shareToken: text('share_token').notNull(),
     payloadJson: jsonb('payload_json').notNull().default({}),
+    templateId: uuid('template_id').references(() => reportTemplates.id, { onDelete: 'set null' }),
+    deliveryMethod: listingReportDeliveryEnum('delivery_method'),
     createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },

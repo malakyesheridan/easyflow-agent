@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq } from 'drizzle-orm';
 import { getDb } from '@/lib/db';
 import { reportTemplates, type ReportTemplate } from '@/db/schema/report_templates';
 import { ok, err, type Result } from '@/lib/result';
@@ -17,7 +17,7 @@ export async function listReportTemplates(params: {
       .select()
       .from(reportTemplates)
       .where(where)
-      .orderBy(asc(reportTemplates.createdAt));
+      .orderBy(desc(reportTemplates.isDefault), asc(reportTemplates.createdAt));
 
     return ok(data);
   } catch (error) {

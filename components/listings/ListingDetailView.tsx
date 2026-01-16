@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Badge, Button, Card, Chip, GlassCard, Input, MetricCard, Select, Textarea } from '@/components/ui';
+import { useSearchParams } from 'next/navigation';
+import { Badge, Button, Card, Chip, GlassCard, Input, MetricCard, SectionHeader, Select, Textarea } from '@/components/ui';
 import InfoTooltip from '@/components/ui/InfoTooltip';
 import ScoreBreakdownTooltip from '@/components/ui/ScoreBreakdownTooltip';
 import { useOrgConfig } from '@/hooks/useOrgConfig';
@@ -39,7 +40,53 @@ const INSPECTION_TYPES = [
   { value: 'private', label: 'Private' },
 ];
 
+const CADENCE_OPTIONS = [
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'fortnightly', label: 'Fortnightly' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'custom', label: 'Custom interval' },
+  { value: 'none', label: 'None' },
+];
+
+const CADENCE_DAY_OPTIONS = [
+  { value: '', label: 'Any day' },
+  { value: '1', label: 'Monday' },
+  { value: '2', label: 'Tuesday' },
+  { value: '3', label: 'Wednesday' },
+  { value: '4', label: 'Thursday' },
+  { value: '5', label: 'Friday' },
+  { value: '6', label: 'Saturday' },
+  { value: '0', label: 'Sunday' },
+];
+
+const DELIVERY_OPTIONS = [
+  { value: 'share_link', label: 'Share link' },
+  { value: 'email', label: 'Emailed (logged)' },
+  { value: 'sms', label: 'Texted (logged)' },
+  { value: 'logged', label: 'Logged only' },
+];
+
+const LISTING_TABS = new Set([
+  'overview',
+  'milestones',
+  'checklist',
+  'buyers',
+  'inspections',
+  'vendor-comms',
+  'reports',
+]);
+
 type Owner = { id: string; name: string | null; email: string | null };
+
+type ReportSettings = {
+  cadenceEnabled: boolean;
+  cadenceType: string;
+  cadenceIntervalDays: number | null;
+  cadenceDayOfWeek: number | null;
+  nextDueAt: string | null;
+  lastSentAt: string | null;
+  templateId: string | null;
+};
 
 type Listing = {
   id: string;
@@ -64,6 +111,7 @@ type Listing = {
   enquiriesCount: number;
   inspectionsCount: number;
   offersCount: number;
+  reportSettings: ReportSettings;
   vendor: { id: string; name: string | null; email: string | null; phone: string | null } | null;
   owner: Owner | null;
 };
@@ -124,12 +172,26 @@ type Report = {
   id: string;
   shareUrl: string;
   createdAt: string | null;
+  templateName: string | null;
+  deliveryMethod: string | null;
+  createdBy: Owner | null;
 };
 
 type ContactOption = {
   id: string;
   fullName: string;
   role: string;
+};
+
+type ReportTemplateOption = {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  cadenceDefaultType: string | null;
+  cadenceDefaultIntervalDays: number | null;
+  cadenceDefaultDayOfWeek: number | null;
+  sectionsJson?: Record<string, boolean> | null;
+  promptsJson?: Record<string, string> | null;
 };
 
 function formatDate(value: string | null) {
@@ -144,6 +206,14 @@ function formatDateTime(value: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '-';
   return date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+function formatDelivery(method: string | null) {
+  if (!method) return 'Share link';
+  if (method === 'email') return 'Emailed';
+  if (method === 'sms') return 'Texted';
+  if (method === 'logged') return 'Logged';
+  return 'Share link';
 }
 
 function toDateInput(value: string | null) {
@@ -171,13 +241,28 @@ export default function ListingDetailView({ listingId }: { listingId: string }) 
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [vendorComms, setVendorComms] = useState<VendorComm[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
+  const [reportTemplates, setReportTemplates] = useState<ReportTemplateOption[]>([]);
   const [owners, setOwners] = useState<Owner[]>([]);
   const [contacts, setContacts] = useState<ContactOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [reportSaving, setReportSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reportStatus, setReportStatus] = useState<{ error: string | null; success: string | null }>({
+    error: null,
+    success: null,
+  });
+  const [reportShareUrl, setReportShareUrl] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState('overview');
+  const searchParams = useSearchParams();
+  const requestedTab = searchParams?.get('tab');
+
+  useEffect(() => {
+    if (requestedTab && LISTING_TABS.has(requestedTab)) {
+      setActiveTab(requestedTab);
+    }
+  }, [requestedTab]);
 
   const [listingDraft, setListingDraft] = useState({
     address: '',
@@ -201,7 +286,23 @@ export default function ListingDetailView({ listingId }: { listingId: string }) 
   const [newBuyer, setNewBuyer] = useState({ buyerContactId: '', status: 'new', nextFollowUpAt: '', notes: '' });
   const [newInspection, setNewInspection] = useState({ type: 'open_home', startsAt: '', endsAt: '', notes: '' });
   const [newComm, setNewComm] = useState({ type: 'update', occurredAt: '', content: '' });
-  const [reportDraft, setReportDraft] = useState({ commentary: '', recommendedNextActions: '' });
+  const [reportSettingsDraft, setReportSettingsDraft] = useState({
+    cadenceEnabled: true,
+    cadenceType: 'weekly',
+    cadenceIntervalDays: '',
+    cadenceDayOfWeek: '',
+    nextDueAt: '',
+    templateId: '',
+  });
+  const [reportDraft, setReportDraft] = useState({
+    templateId: '',
+    deliveryMethod: 'share_link',
+    commentary: '',
+    recommendations: '',
+    feedbackThemes: '',
+    marketingChannels: '',
+    comparableSales: '',
+  });
 
   const loadListing = useCallback(async () => {
     const res = await fetch(`/api/listings/${listingId}?orgId=${orgId}`, { cache: 'no-store' });
@@ -321,8 +422,22 @@ export default function ListingDetailView({ listingId }: { listingId: string }) 
       }
     };
 
+    const loadReportTemplates = async () => {
+      try {
+        const res = await fetch(`/api/report-templates?orgId=${orgId}&type=vendor`, { cache: 'no-store' });
+        const json = await res.json();
+        if (!res.ok || !json.ok) throw new Error('Failed to load report templates');
+        if (!cancelled) {
+          setReportTemplates(json.data ?? []);
+        }
+      } catch {
+        if (!cancelled) setReportTemplates([]);
+      }
+    };
+
     void loadOwners();
     void loadContacts();
+    void loadReportTemplates();
 
     return () => {
       cancelled = true;
@@ -346,9 +461,37 @@ export default function ListingDetailView({ listingId }: { listingId: string }) 
       ownerUserId: listing.owner?.id ?? '',
       vendorContactId: listing.vendor?.id ?? '',
     });
+
+    setReportSettingsDraft({
+      cadenceEnabled: listing.reportSettings?.cadenceEnabled ?? true,
+      cadenceType: listing.reportSettings?.cadenceType ?? 'weekly',
+      cadenceIntervalDays: listing.reportSettings?.cadenceIntervalDays?.toString() ?? '',
+      cadenceDayOfWeek: listing.reportSettings?.cadenceDayOfWeek?.toString() ?? '',
+      nextDueAt: listing.reportSettings?.nextDueAt ? toDateInput(listing.reportSettings.nextDueAt) : '',
+      templateId: listing.reportSettings?.templateId ?? '',
+    });
+
+    setReportDraft((prev) => ({
+      ...prev,
+      templateId: listing.reportSettings?.templateId ?? prev.templateId ?? '',
+    }));
   }, [listing]);
 
   const band = useMemo(() => healthBadge(listing?.campaignHealthScore ?? 0, listing?.healthBand ?? 'watch'), [listing]);
+  const defaultTemplateId = useMemo(() => {
+    if (reportTemplates.length === 0) return '';
+    return reportTemplates.find((template) => template.isDefault)?.id ?? reportTemplates[0]?.id ?? '';
+  }, [reportTemplates]);
+  const selectedTemplate = useMemo(() => {
+    const selectedId = reportDraft.templateId || reportSettingsDraft.templateId;
+    return reportTemplates.find((template) => template.id === selectedId) ?? null;
+  }, [reportDraft.templateId, reportSettingsDraft.templateId, reportTemplates]);
+
+  useEffect(() => {
+    if (!defaultTemplateId) return;
+    setReportSettingsDraft((prev) => (prev.templateId ? prev : { ...prev, templateId: defaultTemplateId }));
+    setReportDraft((prev) => (prev.templateId ? prev : { ...prev, templateId: defaultTemplateId }));
+  }, [defaultTemplateId]);
 
   const nextMilestone = useMemo(() => {
     const upcoming = milestones
@@ -410,6 +553,55 @@ export default function ListingDetailView({ listingId }: { listingId: string }) 
       setError(err instanceof Error ? err.message : 'Failed to update listing');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const saveReportSettings = async () => {
+    if (!orgId || !listingId) return;
+    setReportSaving(true);
+    setReportStatus({ error: null, success: null });
+
+    const cadenceIntervalDays = reportSettingsDraft.cadenceIntervalDays
+      ? Number(reportSettingsDraft.cadenceIntervalDays)
+      : null;
+    const cadenceDayOfWeek = reportSettingsDraft.cadenceDayOfWeek
+      ? Number(reportSettingsDraft.cadenceDayOfWeek)
+      : null;
+    const nextDueAt = reportSettingsDraft.nextDueAt
+      ? new Date(reportSettingsDraft.nextDueAt).toISOString()
+      : null;
+
+    try {
+      const res = await fetch(`/api/listings/${listingId}/report-settings`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orgId,
+          cadenceEnabled: reportSettingsDraft.cadenceEnabled,
+          cadenceType: reportSettingsDraft.cadenceType,
+          cadenceIntervalDays,
+          cadenceDayOfWeek,
+          templateId: reportSettingsDraft.templateId || null,
+          nextDueAt,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json?.error?.message || 'Failed to update report settings');
+      setReportSettingsDraft((prev) => ({
+        ...prev,
+        cadenceEnabled: json.data.cadenceEnabled,
+        cadenceType: json.data.cadenceType,
+        cadenceIntervalDays: json.data.cadenceIntervalDays?.toString() ?? '',
+        cadenceDayOfWeek: json.data.cadenceDayOfWeek?.toString() ?? '',
+        nextDueAt: json.data.nextDueAt ? toDateInput(json.data.nextDueAt) : '',
+        templateId: json.data.templateId ?? prev.templateId,
+      }));
+      setReportStatus({ error: null, success: 'Report settings saved.' });
+      await loadListing();
+    } catch (err) {
+      setReportStatus({ error: err instanceof Error ? err.message : 'Failed to update report settings', success: null });
+    } finally {
+      setReportSaving(false);
     }
   };
 
@@ -720,22 +912,41 @@ export default function ListingDetailView({ listingId }: { listingId: string }) 
 
   const createReport = async () => {
     if (!orgId || !listingId) return;
+    setReportSaving(true);
+    setReportStatus({ error: null, success: null });
+    setReportShareUrl(null);
     try {
       const res = await fetch(`/api/listings/${listingId}/reports`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           orgId,
+          templateId: reportDraft.templateId || undefined,
+          deliveryMethod: reportDraft.deliveryMethod,
           commentary: reportDraft.commentary,
-          recommendedNextActions: reportDraft.recommendedNextActions,
+          recommendations: reportDraft.recommendations,
+          feedbackThemes: reportDraft.feedbackThemes,
+          marketingChannels: reportDraft.marketingChannels,
+          comparableSales: reportDraft.comparableSales,
         }),
       });
       const json = await res.json();
       if (!res.ok || !json.ok) throw new Error(json?.error?.message || 'Failed to create report');
-      setReportDraft({ commentary: '', recommendedNextActions: '' });
+      setReportDraft((prev) => ({
+        ...prev,
+        commentary: '',
+        recommendations: '',
+        feedbackThemes: '',
+        marketingChannels: '',
+        comparableSales: '',
+      }));
+      setReportShareUrl(json.data?.shareUrl ?? null);
+      setReportStatus({ error: null, success: 'Vendor report generated.' });
       await refreshAll();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create report');
+      setReportStatus({ error: err instanceof Error ? err.message : 'Failed to create report', success: null });
+    } finally {
+      setReportSaving(false);
     }
   };
 
@@ -1389,23 +1600,228 @@ export default function ListingDetailView({ listingId }: { listingId: string }) 
 
       {activeTab === 'reports' && (
         <div className="space-y-4">
-          <GlassCard className="space-y-3">
-            <p className="text-sm font-semibold text-text-primary">Generate vendor report</p>
+          {(reportStatus.error || reportStatus.success) && (
+            <div className="text-sm">
+              {reportStatus.error && <p className="text-destructive">{reportStatus.error}</p>}
+              {reportStatus.success && <p className="text-emerald-400">{reportStatus.success}</p>}
+            </div>
+          )}
+
+          <GlassCard className="space-y-4">
+            <SectionHeader
+              title="Reporting cadence"
+              subtitle="Set defaults for vendor reporting."
+              actions={(
+                <InfoTooltip
+                  label="Reporting cadence info"
+                  content={(
+                    <div className="space-y-2">
+                      <p className="text-xs text-text-secondary">
+                        Cadence controls when vendor updates are due. Overdue updates reduce campaign health.
+                      </p>
+                      <p className="text-xs text-text-secondary">
+                        Next due is recalculated after each report is generated.
+                      </p>
+                    </div>
+                  )}
+                />
+              )}
+            />
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <label className="flex items-center gap-2 text-sm text-text-secondary">
+                <input
+                  type="checkbox"
+                  checked={reportSettingsDraft.cadenceEnabled}
+                  onChange={(event) => {
+                    const enabled = event.target.checked;
+                    setReportSettingsDraft((prev) => ({
+                      ...prev,
+                      cadenceEnabled: enabled,
+                      cadenceType: enabled ? (prev.cadenceType === 'none' ? 'weekly' : prev.cadenceType) : 'none',
+                    }));
+                  }}
+                />
+                Cadence enabled
+              </label>
+              <Select
+                label="Cadence"
+                value={reportSettingsDraft.cadenceType}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setReportSettingsDraft((prev) => ({
+                    ...prev,
+                    cadenceType: value,
+                    cadenceEnabled: value !== 'none',
+                  }));
+                }}
+                disabled={!reportSettingsDraft.cadenceEnabled}
+              >
+                {CADENCE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+              {reportSettingsDraft.cadenceType === 'custom' && (
+                <Input
+                  label="Interval (days)"
+                  inputMode="numeric"
+                  value={reportSettingsDraft.cadenceIntervalDays}
+                  onChange={(event) =>
+                    setReportSettingsDraft((prev) => ({
+                      ...prev,
+                      cadenceIntervalDays: event.target.value.replace(/[^\d]/g, ''),
+                    }))
+                  }
+                  disabled={!reportSettingsDraft.cadenceEnabled}
+                />
+              )}
+              <Select
+                label="Preferred day"
+                value={reportSettingsDraft.cadenceDayOfWeek}
+                onChange={(event) => setReportSettingsDraft((prev) => ({ ...prev, cadenceDayOfWeek: event.target.value }))}
+                disabled={!reportSettingsDraft.cadenceEnabled}
+              >
+                {CADENCE_DAY_OPTIONS.map((option) => (
+                  <option key={option.value || 'any'} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+              <Input
+                label="Next report due"
+                type="date"
+                value={reportSettingsDraft.nextDueAt}
+                onChange={(event) => setReportSettingsDraft((prev) => ({ ...prev, nextDueAt: event.target.value }))}
+                disabled={!reportSettingsDraft.cadenceEnabled}
+              />
+              <Select
+                label="Template"
+                value={reportSettingsDraft.templateId}
+                onChange={(event) => setReportSettingsDraft((prev) => ({ ...prev, templateId: event.target.value }))}
+              >
+                <option value="">Select template</option>
+                {reportTemplates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.name} {template.isDefault ? '(default)' : ''}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-text-tertiary">
+              <span>
+                Last report sent: {formatDate(listing?.reportSettings?.lastSentAt ?? null)}
+              </span>
+              <Button variant="secondary" size="sm" onClick={saveReportSettings} disabled={reportSaving}>
+                {reportSaving ? 'Saving...' : 'Save settings'}
+              </Button>
+            </div>
+          </GlassCard>
+
+          <GlassCard className="space-y-4">
+            <SectionHeader
+              title="Generate vendor report"
+              subtitle="Auto-fill campaign data, add commentary, and share."
+              actions={(
+                <InfoTooltip
+                  label="Report content info"
+                  content={(
+                    <div className="space-y-2">
+                      <p className="text-xs text-text-secondary">Reports include campaign snapshot, milestones, and buyer activity.</p>
+                      <p className="text-xs text-text-secondary">Add commentary and recommendations to guide vendor decisions.</p>
+                    </div>
+                  )}
+                />
+              )}
+            />
+            <div className="grid grid-cols-2 gap-3 text-sm text-text-secondary md:grid-cols-4">
+              <div>
+                <p className="text-xs text-text-tertiary">Days on market</p>
+                <p className="text-sm font-semibold text-text-primary">{listing?.daysOnMarket ?? 0}</p>
+              </div>
+              <div>
+                <p className="text-xs text-text-tertiary">Campaign health</p>
+                <p className="text-sm font-semibold text-text-primary">{listing?.campaignHealthScore ?? 0}</p>
+              </div>
+              <div>
+                <p className="text-xs text-text-tertiary">Enquiries</p>
+                <p className="text-sm font-semibold text-text-primary">{listing?.enquiriesCount ?? 0}</p>
+              </div>
+              <div>
+                <p className="text-xs text-text-tertiary">Inspections</p>
+                <p className="text-sm font-semibold text-text-primary">{listing?.inspectionsCount ?? 0}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <Select
+                label="Template"
+                value={reportDraft.templateId}
+                onChange={(event) => setReportDraft((prev) => ({ ...prev, templateId: event.target.value }))}
+              >
+                <option value="">Default template</option>
+                {reportTemplates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.name} {template.isDefault ? '(default)' : ''}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                label="Delivered via"
+                value={reportDraft.deliveryMethod}
+                onChange={(event) => setReportDraft((prev) => ({ ...prev, deliveryMethod: event.target.value }))}
+              >
+                {DELIVERY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
             <Textarea
-              label="Agent commentary"
+              label="Commentary"
               value={reportDraft.commentary}
               onChange={(event) => setReportDraft((prev) => ({ ...prev, commentary: event.target.value }))}
               rows={4}
-              placeholder="Summary of activity and recommendations."
+              placeholder={selectedTemplate?.promptsJson?.commentary || 'What changed this week?'}
             />
             <Textarea
-              label="Recommended next actions"
-              value={reportDraft.recommendedNextActions}
-              onChange={(event) => setReportDraft((prev) => ({ ...prev, recommendedNextActions: event.target.value }))}
+              label="Recommendations"
+              value={reportDraft.recommendations}
+              onChange={(event) => setReportDraft((prev) => ({ ...prev, recommendations: event.target.value }))}
               rows={3}
-              placeholder="Pricing review, marketing refresh, open home schedule."
+              placeholder={selectedTemplate?.promptsJson?.recommendations || 'What should happen next?'}
             />
-            <Button variant="secondary" onClick={createReport}>Generate report</Button>
+            <Textarea
+              label="Feedback themes"
+              value={reportDraft.feedbackThemes}
+              onChange={(event) => setReportDraft((prev) => ({ ...prev, feedbackThemes: event.target.value }))}
+              rows={2}
+              placeholder={selectedTemplate?.promptsJson?.feedbackThemes || 'Key buyer feedback or objections.'}
+            />
+            <Textarea
+              label="Marketing channels"
+              value={reportDraft.marketingChannels}
+              onChange={(event) => setReportDraft((prev) => ({ ...prev, marketingChannels: event.target.value }))}
+              rows={2}
+              placeholder="Portal ads, social, email database, print."
+            />
+            <Textarea
+              label="Comparable sales"
+              value={reportDraft.comparableSales}
+              onChange={(event) => setReportDraft((prev) => ({ ...prev, comparableSales: event.target.value }))}
+              rows={2}
+              placeholder="Address + sale price notes."
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="secondary" onClick={createReport} disabled={reportSaving}>
+                {reportSaving ? 'Generating...' : 'Generate report'}
+              </Button>
+              {reportShareUrl && (
+                <Link href={reportShareUrl} target="_blank" rel="noreferrer">
+                  <Button variant="ghost" size="sm">Open share link</Button>
+                </Link>
+              )}
+            </div>
           </GlassCard>
 
           <GlassCard className="space-y-3">
@@ -1417,8 +1833,17 @@ export default function ListingDetailView({ listingId }: { listingId: string }) 
                 {reports.map((report) => (
                   <div key={report.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border-subtle p-3">
                     <div>
-                      <p className="text-sm font-semibold text-text-primary">Vendor report</p>
-                      <p className="text-xs text-text-tertiary">{formatDate(report.createdAt)}</p>
+                      <p className="text-sm font-semibold text-text-primary">
+                        {report.templateName || 'Vendor report'}
+                      </p>
+                      <p className="text-xs text-text-tertiary">
+                        {formatDate(report.createdAt)} · {formatDelivery(report.deliveryMethod)}
+                      </p>
+                      {report.createdBy && (
+                        <p className="text-xs text-text-tertiary">
+                          {report.createdBy.name || report.createdBy.email || 'Agent'}
+                        </p>
+                      )}
                     </div>
                     <Link href={report.shareUrl} target="_blank" rel="noreferrer">
                       <Button variant="ghost" size="sm">Open share link</Button>

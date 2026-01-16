@@ -6,19 +6,40 @@ import { getDb } from '@/lib/db';
 import { requireOrgContext } from '@/lib/auth/require';
 import { listings } from '@/db/schema/listings';
 import { listingReports } from '@/db/schema/listing_reports';
+import { reportTemplates } from '@/db/schema/report_templates';
 import { listingMilestones } from '@/db/schema/listing_milestones';
 import { listingChecklistItems } from '@/db/schema/listing_checklist_items';
 import { listingEnquiries } from '@/db/schema/listing_enquiries';
 import { listingInspections } from '@/db/schema/listing_inspections';
 import { listingBuyers } from '@/db/schema/listing_buyers';
 import { listingVendorComms } from '@/db/schema/listing_vendor_comms';
+import { contactActivities } from '@/db/schema/contact_activities';
+import { contacts } from '@/db/schema/contacts';
+import { users } from '@/db/schema/users';
 import { createSecureToken } from '@/lib/security/tokens';
 import { recomputeCampaignHealth } from '@/lib/listings/recompute';
+import { computeNextDueAt } from '@/lib/reports/cadence';
+
+const DEFAULT_SECTIONS = {
+  campaignSnapshot: true,
+  milestonesProgress: true,
+  buyerActivitySummary: true,
+  buyerPipelineBreakdown: true,
+  feedbackThemes: true,
+  recommendations: true,
+  marketingChannels: true,
+  comparableSales: true,
+};
 
 const createSchema = z.object({
   orgId: z.string().trim().min(1),
-  commentary: z.string().trim().optional(),
-  recommendedNextActions: z.string().trim().optional(),
+  templateId: z.string().uuid().optional(),
+  deliveryMethod: z.enum(['share_link', 'email', 'sms', 'logged']).optional(),
+  commentary: z.string().trim().min(1).optional(),
+  recommendations: z.string().trim().min(1).optional(),
+  feedbackThemes: z.string().trim().optional(),
+  marketingChannels: z.string().trim().optional(),
+  comparableSales: z.string().trim().optional(),
 });
 
 function toIso(value: Date | null) {
@@ -47,8 +68,15 @@ export const GET = withRoute(async (req: Request, context?: { params?: { id?: st
       payloadJson: listingReports.payloadJson,
       createdAt: listingReports.createdAt,
       createdByUserId: listingReports.createdByUserId,
+      templateId: listingReports.templateId,
+      deliveryMethod: listingReports.deliveryMethod,
+      templateName: reportTemplates.name,
+      createdByName: users.name,
+      createdByEmail: users.email,
     })
     .from(listingReports)
+    .leftJoin(reportTemplates, eq(listingReports.templateId, reportTemplates.id))
+    .leftJoin(users, eq(listingReports.createdByUserId, users.id))
     .where(and(eq(listingReports.orgId, orgContext.data.orgId), eq(listingReports.listingId, listingId)))
     .orderBy(desc(listingReports.createdAt));
 
@@ -58,7 +86,13 @@ export const GET = withRoute(async (req: Request, context?: { params?: { id?: st
       shareUrl: buildShareUrl(row.shareToken),
       createdAt: toIso(row.createdAt),
       createdByUserId: row.createdByUserId ? String(row.createdByUserId) : null,
+      createdBy: row.createdByUserId
+        ? { id: String(row.createdByUserId), name: row.createdByName ?? null, email: row.createdByEmail ?? null }
+        : null,
       payload: row.payloadJson ?? {},
+      templateId: row.templateId ? String(row.templateId) : null,
+      templateName: row.templateName ?? null,
+      deliveryMethod: row.deliveryMethod ?? null,
     }))
   );
 });
@@ -93,6 +127,12 @@ export const POST = withRoute(async (req: Request, context?: { params?: { id?: s
       cars: listings.cars,
       campaignHealthScore: listings.campaignHealthScore,
       campaignHealthReasons: listings.campaignHealthReasons,
+      reportCadenceEnabled: listings.reportCadenceEnabled,
+      reportCadenceType: listings.reportCadenceType,
+      reportCadenceIntervalDays: listings.reportCadenceIntervalDays,
+      reportCadenceDayOfWeek: listings.reportCadenceDayOfWeek,
+      reportTemplateId: listings.reportTemplateId,
+      vendorContactId: listings.vendorContactId,
     })
     .from(listings)
     .where(and(eq(listings.orgId, orgContext.data.orgId), eq(listings.id, listingId)))
@@ -100,7 +140,21 @@ export const POST = withRoute(async (req: Request, context?: { params?: { id?: s
 
   if (!listing) return err('NOT_FOUND', 'Listing not found');
 
-  const [milestones, checklist, enquiries, inspections, buyers, vendorComms] = await Promise.all([
+  const templateId = parsed.data.templateId ?? (listing.reportTemplateId ? String(listing.reportTemplateId) : null);
+  const [template] = templateId
+    ? await db
+        .select()
+        .from(reportTemplates)
+        .where(and(eq(reportTemplates.orgId, orgContext.data.orgId), eq(reportTemplates.id, templateId)))
+        .limit(1)
+    : await db
+        .select()
+        .from(reportTemplates)
+        .where(and(eq(reportTemplates.orgId, orgContext.data.orgId), eq(reportTemplates.templateType, 'vendor')))
+        .orderBy(desc(reportTemplates.isDefault), desc(reportTemplates.createdAt))
+        .limit(1);
+
+  const [milestones, checklist, enquiries, inspections, buyers] = await Promise.all([
     db
       .select({
         name: listingMilestones.name,
@@ -128,10 +182,6 @@ export const POST = withRoute(async (req: Request, context?: { params?: { id?: s
       .select({ status: listingBuyers.status })
       .from(listingBuyers)
       .where(and(eq(listingBuyers.orgId, orgContext.data.orgId), eq(listingBuyers.listingId, listingId))),
-    db
-      .select({ occurredAt: listingVendorComms.occurredAt })
-      .from(listingVendorComms)
-      .where(and(eq(listingVendorComms.orgId, orgContext.data.orgId), eq(listingVendorComms.listingId, listingId))),
   ]);
 
   const now = new Date();
@@ -139,19 +189,38 @@ export const POST = withRoute(async (req: Request, context?: { params?: { id?: s
   const daysOnMarket = Math.max(0, Math.floor((now.getTime() - baseDate.getTime()) / (24 * 60 * 60 * 1000)));
 
   const milestoneCompleted = milestones.filter((item) => item.completedAt).length;
+  const overdueMilestones = milestones.filter((item) => item.targetDueAt && !item.completedAt && item.targetDueAt < now);
   const checklistCompleted = checklist.filter((item) => item.isDone).length;
+
+  const activityWindow = (days: number) => new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  const enquiriesLast7 = enquiries.filter((item) => item.occurredAt >= activityWindow(7)).length;
+  const enquiriesLast14 = enquiries.filter((item) => item.occurredAt >= activityWindow(14)).length;
+  const inspectionsLast7 = inspections.filter((item) => item.startsAt >= activityWindow(7)).length;
+  const inspectionsLast14 = inspections.filter((item) => item.startsAt >= activityWindow(14)).length;
+
   const buyerStatusCounts = buyers.reduce<Record<string, number>>((acc, row) => {
     const key = row.status ?? 'unknown';
     acc[key] = (acc[key] ?? 0) + 1;
     return acc;
   }, {});
 
-  const lastVendorUpdate = vendorComms
-    .map((row) => row.occurredAt)
-    .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+  const resolvedSections = template?.sectionsJson && Object.keys(template.sectionsJson).length > 0
+    ? template.sectionsJson
+    : DEFAULT_SECTIONS;
+  const resolvedPrompts = template?.promptsJson ?? {};
 
   const payload = {
     generatedAt: now.toISOString(),
+    template: template
+      ? {
+          id: String(template.id),
+          name: template.name,
+          sections: resolvedSections,
+          prompts: resolvedPrompts,
+        }
+      : null,
+    sections: resolvedSections,
+    prompts: resolvedPrompts,
     listing: {
       address: listing.addressLine1 ?? '',
       suburb: listing.suburb ?? '',
@@ -169,15 +238,10 @@ export const POST = withRoute(async (req: Request, context?: { params?: { id?: s
       score: listing.campaignHealthScore ?? null,
       reasons: (listing.campaignHealthReasons as string[] | null) ?? [],
     },
-    counts: {
-      enquiries: enquiries.length,
-      inspections: inspections.length,
-      buyers: buyers.length,
-      offers: buyers.filter((row) => row.status === 'offer_made').length,
-    },
     milestones: {
       total: milestones.length,
       completed: milestoneCompleted,
+      overdue: overdueMilestones.length,
       items: milestones.map((row) => ({
         name: row.name,
         targetDueAt: toIso(row.targetDueAt ?? null),
@@ -188,12 +252,20 @@ export const POST = withRoute(async (req: Request, context?: { params?: { id?: s
       total: checklist.length,
       completed: checklistCompleted,
     },
-    buyerPipeline: buyerStatusCounts,
-    vendorComms: {
-      lastSentAt: toIso(lastVendorUpdate),
+    activity: {
+      enquiriesLast7,
+      enquiriesLast14,
+      inspectionsLast7,
+      inspectionsLast14,
+      offers: buyers.filter((row) => row.status === 'offer_made').length,
     },
+    buyerPipeline: buyerStatusCounts,
     commentary: parsed.data.commentary ?? '',
-    recommendedNextActions: parsed.data.recommendedNextActions ?? '',
+    recommendations: parsed.data.recommendations ?? '',
+    feedbackThemes: parsed.data.feedbackThemes ?? '',
+    marketingChannels: parsed.data.marketingChannels ?? '',
+    comparableSales: parsed.data.comparableSales ?? '',
+    deliveryMethod: parsed.data.deliveryMethod ?? 'share_link',
   };
 
   const token = createSecureToken().token;
@@ -207,6 +279,8 @@ export const POST = withRoute(async (req: Request, context?: { params?: { id?: s
       type: 'vendor',
       shareToken: token,
       payloadJson: payload as any,
+      templateId: template ? template.id : null,
+      deliveryMethod: parsed.data.deliveryMethod ?? 'share_link',
       createdByUserId: orgContext.data.actor.userId ?? null,
     })
     .returning({ id: listingReports.id });
@@ -215,12 +289,56 @@ export const POST = withRoute(async (req: Request, context?: { params?: { id?: s
     orgId: orgContext.data.orgId,
     listingId,
     type: 'report_sent',
-    content: 'Vendor report generated.',
+    content: `Report generated${template ? ` via ${template.name}` : ''}. ${shareUrl}`,
     occurredAt: now,
     createdByUserId: orgContext.data.actor.userId ?? null,
   });
 
+  if (listing.vendorContactId) {
+    const [vendor] = await db
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(and(eq(contacts.id, listing.vendorContactId), eq(contacts.orgId, orgContext.data.orgId)))
+      .limit(1);
+    if (vendor) {
+      await db.insert(contactActivities).values({
+        orgId: orgContext.data.orgId,
+        contactId: String(vendor.id),
+        type: 'report_sent',
+        content: `Vendor report generated. ${shareUrl}`,
+        occurredAt: now,
+        createdByUserId: orgContext.data.actor.userId ?? null,
+      });
+    }
+  }
+
+  const nextDueAt = listing.reportCadenceEnabled && listing.reportCadenceType !== 'none'
+    ? computeNextDueAt({
+        baseDate: now,
+        cadence: {
+          cadenceType: listing.reportCadenceType ?? 'weekly',
+          intervalDays: listing.reportCadenceIntervalDays ?? null,
+          dayOfWeek: listing.reportCadenceDayOfWeek ?? null,
+        },
+      })
+    : null;
+
+  await db
+    .update(listings)
+    .set({
+      reportLastSentAt: now,
+      reportNextDueAt: nextDueAt ?? null,
+      reportTemplateId: template ? template.id : listing.reportTemplateId,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(listings.orgId, orgContext.data.orgId), eq(listings.id, listingId)));
+
   await recomputeCampaignHealth({ orgId: orgContext.data.orgId, listingId });
 
-  return ok({ id: inserted?.id ? String(inserted.id) : null, shareUrl, payload });
+  return ok({
+    id: inserted?.id ? String(inserted.id) : null,
+    shareUrl,
+    payload,
+    nextDueAt: toIso(nextDueAt ?? null),
+  });
 });
