@@ -12,6 +12,7 @@ import { orgSettings } from '@/db/schema/org_settings';
 import { emitCommEvent } from '@/lib/communications/emit';
 import { renderTemplate } from '@/lib/communications/renderer';
 import { logAuditEvent } from '@/lib/audit/logAuditEvent';
+import { getBaseUrl } from '@/lib/url';
 import type { RuleAction, TriggerKey } from './types';
 
 type DbClient = {
@@ -85,15 +86,38 @@ function formatCurrency(amountCents?: number | null, currency?: string | null): 
   return `${currency || 'AUD'} ${amount}`;
 }
 
-function getBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-}
-
-function buildAppLink(params: { entityType: string; entityId: string; orgId: string; jobId?: string | null }): string {
+function buildAppLink(params: {
+  entityType: string;
+  entityId: string;
+  orgId: string;
+  jobId?: string | null;
+  contactId?: string | null;
+  appraisalId?: string | null;
+  listingId?: string | null;
+  reportId?: string | null;
+  reportToken?: string | null;
+}): string {
   const baseUrl = getBaseUrl();
   const orgQuery = `?orgId=${params.orgId}`;
   if (params.entityType === 'announcement') {
     return `${baseUrl}/announcements${orgQuery}`;
+  }
+  if (params.entityType === 'contact' || params.contactId) {
+    const contactId = params.entityType === 'contact' ? params.entityId : params.contactId;
+    if (contactId) return `${baseUrl}/contacts/${contactId}${orgQuery}`;
+  }
+  if (params.entityType === 'appraisal' || params.appraisalId) {
+    const appraisalId = params.entityType === 'appraisal' ? params.entityId : params.appraisalId;
+    if (appraisalId) return `${baseUrl}/appraisals/${appraisalId}${orgQuery}`;
+  }
+  if (params.entityType === 'listing' || params.listingId) {
+    const listingId = params.entityType === 'listing' ? params.entityId : params.listingId;
+    if (listingId) return `${baseUrl}/listings/${listingId}${orgQuery}`;
+  }
+  if (params.entityType === 'report' || params.reportId || params.reportToken) {
+    if (params.reportToken) return `${baseUrl}/reports/vendor/${params.reportToken}`;
+    const reportId = params.entityType === 'report' ? params.entityId : params.reportId;
+    if (reportId) return `${baseUrl}/reports${orgQuery}`;
   }
   const jobId = params.entityType === 'job' ? params.entityId : params.jobId;
   if (jobId) {
@@ -261,6 +285,16 @@ async function buildCommPreview(params: {
   const job = params.context.job as any;
   const address = job ? formatAddress(job) : null;
   const crewSummary = (params.context.crew ?? []).map(formatCrewName).filter(Boolean).join(', ');
+  const contactId =
+    typeof (params.eventPayload as any).contactId === 'string' ? (params.eventPayload as any).contactId : null;
+  const appraisalId =
+    typeof (params.eventPayload as any).appraisalId === 'string' ? (params.eventPayload as any).appraisalId : null;
+  const listingId =
+    typeof (params.eventPayload as any).listingId === 'string' ? (params.eventPayload as any).listingId : null;
+  const reportId =
+    typeof (params.eventPayload as any).reportId === 'string' ? (params.eventPayload as any).reportId : null;
+  const reportToken =
+    typeof (params.eventPayload as any).reportToken === 'string' ? (params.eventPayload as any).reportToken : null;
 
   const baseVariables: Record<string, any> = {
     org: {
@@ -277,16 +311,21 @@ async function buildCommPreview(params: {
       email: null,
       phone: null,
     },
-    now: new Date().toISOString(),
-    links: {
-      appEntityUrl: buildAppLink({
-        entityType: job ? 'job' : 'system',
-        entityId: job?.id ?? params.runId,
-        orgId: params.orgId,
-        jobId: job?.id ?? null,
-      }),
-      mapsUrl: address ? buildMapsLink(address) : null,
-    },
+      now: new Date().toISOString(),
+      links: {
+        appEntityUrl: buildAppLink({
+          entityType: job ? 'job' : 'system',
+          entityId: job?.id ?? params.runId,
+          orgId: params.orgId,
+          jobId: job?.id ?? null,
+          contactId,
+          appraisalId,
+          listingId,
+          reportId,
+          reportToken,
+        }),
+        mapsUrl: address ? buildMapsLink(address) : null,
+      },
     job: job
       ? {
           id: job.id,

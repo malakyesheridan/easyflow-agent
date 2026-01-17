@@ -9,7 +9,14 @@ import type { AutomationRuleDraft, RuleAction, RuleCondition, TriggerKey } from 
 import type { ConditionDefinition } from '@/lib/automationRules/conditionsRegistry';
 import { CONDITIONS_BY_TRIGGER, getConditionDefinition } from '@/lib/automationRules/conditionsRegistry';
 import type { CustomAutomationRule } from '@/components/settings/automation-builder/types';
-import { TRIGGER_GROUPS, TRIGGER_LABELS, COMM_DEFAULT_TEMPLATE_BY_TO } from '@/components/settings/automation-builder/constants';
+import {
+  ACTION_LABELS,
+  COMM_DEFAULT_TEMPLATE_BY_TO,
+  getActionOptionsForEdition,
+  getTriggerGroupsForEdition,
+  TRIGGER_LABELS,
+} from '@/components/settings/automation-builder/constants';
+import { getAppEdition } from '@/lib/appEdition';
 
 const MAX_CONDITIONS = 10;
 const MAX_ACTIONS = 5;
@@ -38,19 +45,20 @@ type DryRunResult = {
   warnings: string[];
 };
 
-function buildDefaultActionWithType(type: RuleAction['type']): RuleAction {
+function buildDefaultActionWithType(type: RuleAction['type'], isTradeEdition: boolean): RuleAction {
+  const defaultRecipient = isTradeEdition ? 'customer' : 'admin';
   if (type === 'comm.send_sms') {
-    return { type, to: 'customer', templateKey: COMM_DEFAULT_TEMPLATE_BY_TO.customer };
+    return { type, to: defaultRecipient, templateKey: COMM_DEFAULT_TEMPLATE_BY_TO[defaultRecipient] ?? COMM_DEFAULT_TEMPLATE_BY_TO.admin };
   }
   if (type === 'comm.send_inapp') {
-    return { type, to: 'ops', templateKey: COMM_DEFAULT_TEMPLATE_BY_TO.ops };
+    return { type, to: 'admin', templateKey: COMM_DEFAULT_TEMPLATE_BY_TO.admin };
   }
   if (type === 'job.add_tag') return { type, tag: 'needs_attention' };
   if (type === 'job.add_flag') return { type, flag: 'needs_attention' };
   if (type === 'tasks.create_checklist') return { type, checklistKey: '' };
   if (type === 'invoice.create_draft') return { type, mode: 'from_job' };
   if (type === 'reminder.create_internal') return { type, minutesFromNow: 60, message: '' };
-  return { type: 'comm.send_email', to: 'customer', templateKey: COMM_DEFAULT_TEMPLATE_BY_TO.customer };
+  return { type: 'comm.send_email', to: defaultRecipient, templateKey: COMM_DEFAULT_TEMPLATE_BY_TO[defaultRecipient] ?? COMM_DEFAULT_TEMPLATE_BY_TO.admin };
 }
 
 const STATUS_CONDITION_KEYS = new Set(['job.new_status_equals', 'job.previous_status_equals']);
@@ -132,6 +140,9 @@ export default function RuleDetailsDrawer(props: {
   autoRunTest?: boolean;
 }) {
   const { open, orgId, rule, templates, providerStatus, crewOptions, materialCategoryOptions, onClose, onUpdated, autoRunTest } = props;
+  const edition = getAppEdition();
+  const isTradeEdition = edition === 'trades';
+  const actionOptions = getActionOptionsForEdition(edition);
   const isMobile = useIsMobile();
   const swipe = useSwipeToClose(onClose, isMobile);
 
@@ -172,6 +183,12 @@ export default function RuleDetailsDrawer(props: {
     setTestedAtOverride(null);
   }, [rule]);
 
+  const triggerGroups = useMemo(() => {
+    const base = getTriggerGroupsForEdition(edition);
+    const currentGroup = draft ? TRIGGER_LABELS[draft.triggerKey]?.group : null;
+    if (currentGroup && !base.includes(currentGroup)) return [...base, currentGroup];
+    return base;
+  }, [draft, edition]);
   const triggerMeta = draft ? TRIGGER_LABELS[draft.triggerKey] : null;
   const allowedDefinitions = draft ? CONDITIONS_BY_TRIGGER[draft.triggerKey] ?? [] : [];
   const allowedConditionKeys = allowedDefinitions.map((definition) => definition.key);
@@ -189,6 +206,35 @@ export default function RuleDetailsDrawer(props: {
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
     return testedAt >= tenMinutesAgo;
   }, [rule?.lastTestedAt, testedAtOverride]);
+
+  const emailRecipientOptions = useMemo(() => {
+    if (isTradeEdition) {
+      return [
+        { value: 'customer', label: 'Customer' },
+        { value: 'admin', label: 'Admins' },
+        { value: 'crew_assigned', label: 'Assigned crew' },
+        { value: 'custom', label: 'Custom' },
+      ];
+    }
+    return [
+      { value: 'admin', label: 'Principals / Team Leads' },
+      { value: 'custom', label: 'Custom' },
+    ];
+  }, [isTradeEdition]);
+
+  const inAppRecipientOptions = useMemo(() => {
+    if (isTradeEdition) {
+      return [
+        { value: 'admin', label: 'Admins' },
+        { value: 'crew_assigned', label: 'Assigned crew' },
+        { value: 'ops', label: 'Ops team' },
+      ];
+    }
+    return [
+      { value: 'admin', label: 'Principals / Team Leads' },
+      { value: 'ops', label: 'Ops team' },
+    ];
+  }, [isTradeEdition]);
 
   const isDirty = useMemo(() => {
     if (!rule || !draft) return false;
@@ -226,7 +272,9 @@ export default function RuleDetailsDrawer(props: {
 
   const addAction = () => {
     if (!draft || draft.actions.length >= MAX_ACTIONS) return;
-    setDraft((prev) => (prev ? { ...prev, actions: [...prev.actions, buildDefaultActionWithType('comm.send_email')] } : prev));
+    setDraft((prev) =>
+      prev ? { ...prev, actions: [...prev.actions, buildDefaultActionWithType('comm.send_email', isTradeEdition)] } : prev
+    );
   };
 
   const removeCondition = (index: number) => {
@@ -375,7 +423,7 @@ export default function RuleDetailsDrawer(props: {
               value={draft.triggerKey}
               onChange={(e) => setDraft({ ...draft, triggerKey: e.target.value as TriggerKey, conditions: [] })}
             >
-              {TRIGGER_GROUPS.map((group) => (
+              {triggerGroups.map((group) => (
                 <optgroup key={group} label={group}>
                   {Object.entries(TRIGGER_LABELS)
                     .filter(([, meta]) => meta.group === group)
@@ -603,22 +651,35 @@ export default function RuleDetailsDrawer(props: {
                   commAction &&
                   (commAction.type === 'comm.send_email' || commAction.type === 'comm.send_sms') &&
                   commAction.to === 'customer';
+                const baseRecipientOptions =
+                  commAction && commAction.type === 'comm.send_inapp'
+                    ? inAppRecipientOptions
+                    : emailRecipientOptions;
+                const recipientOptions =
+                  commAction && !baseRecipientOptions.some((opt) => opt.value === commAction.to)
+                    ? [
+                        ...baseRecipientOptions,
+                        { value: commAction.to, label: `Legacy: ${commAction.to.replace(/_/g, ' ')}` },
+                      ]
+                    : baseRecipientOptions;
                 return (
                   <Card key={`${action.type}-${index}`} className="space-y-2">
                     <div className="flex items-start justify-between gap-2">
                       <Select
                         label="Action"
                         value={action.type}
-                        onChange={(e) => updateAction(index, buildDefaultActionWithType(e.target.value as RuleAction['type']))}
+                        onChange={(e) =>
+                          updateAction(index, buildDefaultActionWithType(e.target.value as RuleAction['type'], isTradeEdition))
+                        }
                       >
-                        <option value="comm.send_email">Send email</option>
-                        <option value="comm.send_sms">Send SMS</option>
-                        <option value="comm.send_inapp">Send in-app notification</option>
-                        <option value="job.add_tag">Add job tag</option>
-                        <option value="job.add_flag">Add job flag</option>
-                        <option value="tasks.create_checklist">Create checklist tasks</option>
-                        <option value="invoice.create_draft">Create draft invoice</option>
-                        <option value="reminder.create_internal">Create internal reminder</option>
+                        {(actionOptions.includes(action.type)
+                          ? actionOptions
+                          : [...actionOptions, action.type]
+                        ).map((type) => (
+                          <option key={type} value={type}>
+                            {ACTION_LABELS[type] ?? type}
+                          </option>
+                        ))}
                       </Select>
                       <Button size="sm" variant="secondary" onClick={() => removeAction(index)}>
                         Remove
@@ -636,11 +697,11 @@ export default function RuleDetailsDrawer(props: {
                             updateAction(index, { ...commAction, to, templateKey } as RuleAction);
                           }}
                         >
-                          {commAction.type !== 'comm.send_inapp' && <option value="customer">Customer</option>}
-                          <option value="admin">Admins</option>
-                          <option value="crew_assigned">Assigned crew</option>
-                          {commAction.type !== 'comm.send_inapp' && <option value="custom">Custom</option>}
-                          {commAction.type === 'comm.send_inapp' && <option value="ops">Ops team</option>}
+                          {recipientOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
                         </Select>
                         <Select
                           label="Template"

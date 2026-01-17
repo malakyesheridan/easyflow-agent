@@ -298,6 +298,16 @@ const MATERIAL_STOCK_LOW_EXISTS: ConditionDefinition = {
 };
 
 export const CONDITIONS_BY_TRIGGER: Record<TriggerKey, ConditionDefinition[]> = {
+  'contact.followup_overdue': [],
+  'contact.seller_intent_hot': [],
+  'appraisal.upcoming_24h': [],
+  'appraisal.followup_due': [],
+  'appraisal.stage_changed': [],
+  'listing.milestone_overdue': [],
+  'listing.vendor_report_due': [],
+  'listing.vendor_update_overdue': [],
+  'listing.health_stalling': [],
+  'report.generated': [],
   'job.created': [JOB_TYPE_EQUALS, JOB_PRIORITY_EQUALS, JOB_HAS_TAG, JOB_IS_ASSIGNED],
   'job.assigned': [JOB_ASSIGNED_TO_CREW, JOB_ASSIGNED_TO_ANY, JOB_SCHEDULED_WITHIN_HOURS],
   'job.rescheduled': [JOB_RESCHEDULED_WITHIN_HOURS, JOB_PRIORITY_EQUALS, JOB_HAS_TAG],

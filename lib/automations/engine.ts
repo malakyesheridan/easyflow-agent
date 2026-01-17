@@ -121,10 +121,30 @@ function resolveEntityInfo(context: AutomationContext, payload: Record<string, u
   const assignmentId = typeof payload.assignmentId === 'string' ? payload.assignmentId : null;
   const jobId = typeof payload.jobId === 'string' ? payload.jobId : null;
   const materialId = typeof payload.materialId === 'string' ? payload.materialId : null;
+  const contactId = typeof payload.contactId === 'string' ? payload.contactId : null;
+  const appraisalId = typeof payload.appraisalId === 'string' ? payload.appraisalId : null;
+  const listingId = typeof payload.listingId === 'string' ? payload.listingId : null;
+  const reportId = typeof payload.reportId === 'string' ? payload.reportId : null;
 
+  if (reportId) return { entityType: 'report', entityId: reportId };
+  if (listingId) return { entityType: 'listing', entityId: listingId };
+  if (appraisalId) return { entityType: 'appraisal', entityId: appraisalId };
+  if (contactId) return { entityType: 'contact', entityId: contactId };
   if (assignmentId) return { entityType: 'schedule_assignment', entityId: assignmentId };
   if (jobId) return { entityType: 'job', entityId: jobId };
   if (materialId) return { entityType: 'material', entityId: materialId };
+  if (context.report && typeof (context.report as any).id === 'string') {
+    return { entityType: 'report', entityId: (context.report as any).id };
+  }
+  if (context.listing && typeof (context.listing as any).id === 'string') {
+    return { entityType: 'listing', entityId: (context.listing as any).id };
+  }
+  if (context.appraisal && typeof (context.appraisal as any).id === 'string') {
+    return { entityType: 'appraisal', entityId: (context.appraisal as any).id };
+  }
+  if (context.contact && typeof (context.contact as any).id === 'string') {
+    return { entityType: 'contact', entityId: (context.contact as any).id };
+  }
   if (context.assignment && typeof context.assignment.id === 'string') {
     return { entityType: 'schedule_assignment', entityId: context.assignment.id };
   }

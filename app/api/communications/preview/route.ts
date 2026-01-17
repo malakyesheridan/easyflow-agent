@@ -16,6 +16,7 @@ import { jobPayments } from '@/db/schema/job_payments';
 import { announcements } from '@/db/schema/announcements';
 import { assignmentToDateRange } from '@/lib/utils/scheduleTime';
 import { renderEmailHtml, renderTemplate } from '@/lib/communications/renderer';
+import { getBaseUrl } from '@/lib/url';
 
 function formatAddress(job: any): string {
   const parts = [
@@ -30,8 +31,10 @@ function formatAddress(job: any): string {
   return parts.join(', ');
 }
 
-function buildAppLink(params: { entityType: string; entityId: string; orgId: string; jobId?: string | null }): string {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+function buildAppLink(
+  params: { entityType: string; entityId: string; orgId: string; jobId?: string | null },
+  baseUrl: string
+): string {
   const orgQuery = `?orgId=${params.orgId}`;
   if (params.entityType === 'job') {
     return `${baseUrl}/jobs/${params.entityId}${orgQuery}`;
@@ -43,7 +46,7 @@ function buildAppLink(params: { entityType: string; entityId: string; orgId: str
   if (params.entityType === 'announcement') {
     return `${baseUrl}/announcements${orgQuery}`;
   }
-  return `${baseUrl}${orgQuery}`;
+    return `${baseUrl}${orgQuery}`;
 }
 
 function buildMapsLink(address: string | null): string | null {
@@ -77,6 +80,7 @@ export const POST = withRoute(async (req: Request) => {
   let payload = body?.payload && typeof body.payload === 'object' ? body.payload : {};
 
   return await withCommOrgScope({ orgId: context.data.orgId, roleKey: 'system' }, async (db) => {
+    const baseUrl = getBaseUrl(req);
     let template = null;
     if (typeof body?.templateId === 'string') {
       [template] = await db
@@ -232,7 +236,7 @@ export const POST = withRoute(async (req: Request) => {
           entityId,
           orgId: context.data.orgId,
           jobId: jobRow?.id ?? null,
-        }),
+        }, baseUrl),
         mapsUrl: address ? buildMapsLink(address) : null,
       },
       job: jobRow

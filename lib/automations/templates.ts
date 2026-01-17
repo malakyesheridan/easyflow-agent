@@ -1,6 +1,7 @@
 import type { AutomationTemplate } from '@/lib/automations/types';
+import { getAppEdition } from '@/lib/appEdition';
 
-export const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
+export const TRADE_AUTOMATION_TEMPLATES: AutomationTemplate[] = [
   {
     key: 'job_scheduled_client_email',
     name: 'Job scheduled: email client confirmation',
@@ -637,6 +638,258 @@ export const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
   },
 ];
 
+export const REAL_ESTATE_AUTOMATION_TEMPLATES: AutomationTemplate[] = [
+  {
+    key: 'contact_followup_overdue_notify',
+    name: 'Contact follow-up overdue: notify owner',
+    description: 'Alert the contact owner when a follow-up is overdue.',
+    category: 'contacts',
+    triggerType: 'contact.followup_overdue',
+    actions: [
+      {
+        id: 'notify-owner',
+        type: 'notification.create',
+        params: {
+          title: 'Contact follow-up overdue',
+          body: 'A contact follow-up is overdue. Plan the next touch.',
+          recipients: [{ type: 'ref', ref: 'contact.owner' }],
+          severity: 'warning',
+        },
+      },
+    ],
+    configSchema: [
+      {
+        key: 'recipients',
+        label: 'Recipients',
+        type: 'recipients',
+        path: 'actions.0.params.recipients',
+      },
+    ],
+  },
+  {
+    key: 'contact_hot_seller_intent_notify',
+    name: 'Hot seller intent: notify owner',
+    description: 'Notify the contact owner when intent is hot.',
+    category: 'contacts',
+    triggerType: 'contact.seller_intent_hot',
+    actions: [
+      {
+        id: 'notify-owner',
+        type: 'notification.create',
+        params: {
+          title: 'Hot seller intent',
+          body: 'A contact just crossed into hot seller intent.',
+          recipients: [{ type: 'ref', ref: 'contact.owner' }],
+          severity: 'info',
+        },
+      },
+    ],
+    configSchema: [
+      {
+        key: 'recipients',
+        label: 'Recipients',
+        type: 'recipients',
+        path: 'actions.0.params.recipients',
+      },
+    ],
+  },
+  {
+    key: 'appraisal_upcoming_notify',
+    name: 'Appraisal upcoming (24h): notify owner',
+    description: 'Notify the appraisal owner 24 hours before the appointment.',
+    category: 'appraisals',
+    triggerType: 'appraisal.upcoming_24h',
+    actions: [
+      {
+        id: 'notify-owner',
+        type: 'notification.create',
+        params: {
+          title: 'Appraisal upcoming',
+          body: 'An appraisal is scheduled within the next 24 hours.',
+          recipients: [{ type: 'ref', ref: 'appraisal.owner' }],
+          severity: 'info',
+        },
+      },
+    ],
+    configSchema: [
+      {
+        key: 'recipients',
+        label: 'Recipients',
+        type: 'recipients',
+        path: 'actions.0.params.recipients',
+      },
+    ],
+  },
+  {
+    key: 'appraisal_followup_due_notify',
+    name: 'Appraisal follow-up due: notify owner',
+    description: 'Alert the appraisal owner when follow-up is due.',
+    category: 'appraisals',
+    triggerType: 'appraisal.followup_due',
+    actions: [
+      {
+        id: 'notify-owner',
+        type: 'notification.create',
+        params: {
+          title: 'Appraisal follow-up due',
+          body: 'An appraisal follow-up is due. Keep momentum while interest is high.',
+          recipients: [{ type: 'ref', ref: 'appraisal.owner' }],
+          severity: 'warning',
+        },
+      },
+    ],
+    configSchema: [
+      {
+        key: 'recipients',
+        label: 'Recipients',
+        type: 'recipients',
+        path: 'actions.0.params.recipients',
+      },
+    ],
+  },
+  {
+    key: 'listing_milestone_overdue_notify',
+    name: 'Listing milestone overdue: notify owner',
+    description: 'Alert the listing owner when a milestone is overdue.',
+    category: 'listings',
+    triggerType: 'listing.milestone_overdue',
+    actions: [
+      {
+        id: 'notify-owner',
+        type: 'notification.create',
+        params: {
+          title: 'Listing milestone overdue',
+          body: 'A listing milestone is overdue. Review the next step in the campaign.',
+          recipients: [{ type: 'ref', ref: 'listing.owner' }],
+          severity: 'warning',
+        },
+      },
+    ],
+    configSchema: [
+      {
+        key: 'recipients',
+        label: 'Recipients',
+        type: 'recipients',
+        path: 'actions.0.params.recipients',
+      },
+    ],
+  },
+  {
+    key: 'listing_vendor_report_due_notify',
+    name: 'Vendor report due: notify owner',
+    description: 'Alert the listing owner when a vendor report is due.',
+    category: 'reports',
+    triggerType: 'listing.vendor_report_due',
+    actions: [
+      {
+        id: 'notify-owner',
+        type: 'notification.create',
+        params: {
+          title: 'Vendor report due',
+          body: 'A vendor report is due for an active listing.',
+          recipients: [{ type: 'ref', ref: 'listing.owner' }],
+          severity: 'warning',
+        },
+      },
+    ],
+    configSchema: [
+      {
+        key: 'recipients',
+        label: 'Recipients',
+        type: 'recipients',
+        path: 'actions.0.params.recipients',
+      },
+    ],
+  },
+  {
+    key: 'listing_vendor_update_overdue_notify',
+    name: 'Vendor update overdue: notify owner',
+    description: 'Alert the listing owner when vendor updates are overdue.',
+    category: 'reports',
+    triggerType: 'listing.vendor_update_overdue',
+    actions: [
+      {
+        id: 'notify-owner',
+        type: 'notification.create',
+        params: {
+          title: 'Vendor update overdue',
+          body: 'Vendor updates are overdue. Send a quick update to protect the relationship.',
+          recipients: [{ type: 'ref', ref: 'listing.owner' }],
+          severity: 'warning',
+        },
+      },
+    ],
+    configSchema: [
+      {
+        key: 'recipients',
+        label: 'Recipients',
+        type: 'recipients',
+        path: 'actions.0.params.recipients',
+      },
+    ],
+  },
+  {
+    key: 'listing_health_stalling_notify',
+    name: 'Listing health stalling: notify owner',
+    description: 'Alert the listing owner when campaign health is stalling.',
+    category: 'listings',
+    triggerType: 'listing.health_stalling',
+    actions: [
+      {
+        id: 'notify-owner',
+        type: 'notification.create',
+        params: {
+          title: 'Listing health stalling',
+          body: 'Campaign health has dipped. Review pricing, marketing, and buyer feedback.',
+          recipients: [{ type: 'ref', ref: 'listing.owner' }],
+          severity: 'warning',
+        },
+      },
+    ],
+    configSchema: [
+      {
+        key: 'recipients',
+        label: 'Recipients',
+        type: 'recipients',
+        path: 'actions.0.params.recipients',
+      },
+    ],
+  },
+  {
+    key: 'report_generated_notify',
+    name: 'Vendor report generated: notify owner',
+    description: 'Notify the listing owner when a report is generated.',
+    category: 'reports',
+    triggerType: 'report.generated',
+    actions: [
+      {
+        id: 'notify-owner',
+        type: 'notification.create',
+        params: {
+          title: 'Vendor report generated',
+          body: 'A vendor report is ready to share.',
+          recipients: [{ type: 'ref', ref: 'listing.owner' }],
+          severity: 'info',
+        },
+      },
+    ],
+    configSchema: [
+      {
+        key: 'recipients',
+        label: 'Recipients',
+        type: 'recipients',
+        path: 'actions.0.params.recipients',
+      },
+    ],
+  },
+];
+
+export function getAutomationTemplates(): AutomationTemplate[] {
+  return getAppEdition() === 'trades' ? TRADE_AUTOMATION_TEMPLATES : REAL_ESTATE_AUTOMATION_TEMPLATES;
+}
+
+export const AUTOMATION_TEMPLATES = getAutomationTemplates();
+
 export function getAutomationTemplateByKey(key: string): AutomationTemplate | null {
-  return AUTOMATION_TEMPLATES.find((template) => template.key === key) ?? null;
+  return getAutomationTemplates().find((template) => template.key === key) ?? null;
 }

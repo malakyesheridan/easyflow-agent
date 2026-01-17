@@ -27,11 +27,6 @@ type OrgMemberRow = {
   roleName: string | null;
   membershipStatus: string;
   membershipCreatedAt: string;
-  crewMemberId: string | null;
-  crewDisplayName: string | null;
-  crewRole: string | null;
-  crewActive: boolean | null;
-  crewEmail: string | null;
   lastSeenAt: string | null;
   sessionsTotal: number;
   sessions30d: number;
@@ -43,25 +38,14 @@ type OrgInviteRow = {
   roleId: string | null;
   roleKey: string | null;
   roleName: string | null;
-  crewMemberId: string | null;
-  crewDisplayName: string | null;
   status: string;
   createdAt: string;
   expiresAt: string;
 };
 
-type CrewWithoutAccountRow = {
-  id: string;
-  displayName: string;
-  role: string;
-  email: string | null;
-  active: boolean;
-};
-
 type OrgMembersPayload = {
   members: OrgMemberRow[];
   invites: OrgInviteRow[];
-  crewWithoutAccounts: CrewWithoutAccountRow[];
   roles: OrgRoleOption[];
 };
 
@@ -100,6 +84,14 @@ function formatStatusLabel(value: string): string {
     .join(' ');
 }
 
+function formatRoleLabel(roleKey?: string | null, roleName?: string | null): string {
+  const normalized = roleKey?.toLowerCase() ?? '';
+  if (normalized === 'admin') return 'Principal';
+  if (normalized === 'manager') return 'Team Lead';
+  if (normalized === 'staff') return 'Agent';
+  return roleName || roleKey || '-';
+}
+
 function StatusBadge({ status }: { status: string }) {
   const normalized = status.toLowerCase();
   const variant =
@@ -120,14 +112,12 @@ export default function OrgUserManagement({ orgId }: { orgId: string }) {
   const isMobile = useIsMobile();
   const [members, setMembers] = useState<OrgMemberRow[]>([]);
   const [invites, setInvites] = useState<OrgInviteRow[]>([]);
-  const [crewWithoutAccounts, setCrewWithoutAccounts] = useState<CrewWithoutAccountRow[]>([]);
   const [roles, setRoles] = useState<OrgRoleOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRoleId, setInviteRoleId] = useState('');
-  const [inviteCrewMemberId, setInviteCrewMemberId] = useState('');
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
@@ -143,13 +133,11 @@ export default function OrgUserManagement({ orgId }: { orgId: string }) {
       if (!res.ok || !json.ok) throw new Error(message || 'Failed to load org users');
       setMembers(json.data.members ?? []);
       setInvites(json.data.invites ?? []);
-      setCrewWithoutAccounts(json.data.crewWithoutAccounts ?? []);
       setRoles(json.data.roles ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load org users');
       setMembers([]);
       setInvites([]);
-      setCrewWithoutAccounts([]);
       setRoles([]);
     } finally {
       setLoading(false);
@@ -179,22 +167,13 @@ export default function OrgUserManagement({ orgId }: { orgId: string }) {
     return invites.filter((invite) => invite.status === 'pending');
   }, [invites]);
 
-  const pendingInvitesByCrewId = useMemo(() => {
-    const map = new Map<string, OrgInviteRow>();
-    pendingInvites.forEach((invite) => {
-      if (invite.crewMemberId) map.set(invite.crewMemberId, invite);
-    });
-    return map;
-  }, [pendingInvites]);
-
   const inviteCounts = useMemo(() => {
     return {
       members: members.length,
       active: members.filter((member) => member.userStatus === 'active').length,
       invited: pendingInvites.length,
-      crewWithoutAccounts: crewWithoutAccounts.length,
     };
-  }, [crewWithoutAccounts.length, members, pendingInvites.length]);
+  }, [members, pendingInvites.length]);
 
   const summaryLabel = useMemo(() => {
     if (loading) return 'Loading members...';
@@ -202,7 +181,7 @@ export default function OrgUserManagement({ orgId }: { orgId: string }) {
   }, [inviteCounts.invited, inviteCounts.members, loading]);
 
   const sendInvite = useCallback(
-    async (payload: { inviteId?: string; email?: string; roleId?: string; crewMemberId?: string | null }) => {
+    async (payload: { inviteId?: string; email?: string; roleId?: string }) => {
       setInviteLoading(true);
       setInviteError(null);
       setInviteSuccess(null);
@@ -242,13 +221,11 @@ export default function OrgUserManagement({ orgId }: { orgId: string }) {
     const inviteUrl = await sendInvite({
       email: inviteEmail.trim(),
       roleId: resolvedRoleId,
-      crewMemberId: inviteCrewMemberId || null,
     });
     if (inviteUrl) {
       setInviteEmail('');
-      setInviteCrewMemberId('');
     }
-  }, [defaultRoleId, inviteCrewMemberId, inviteEmail, inviteRoleId, sendInvite]);
+  }, [defaultRoleId, inviteEmail, inviteRoleId, sendInvite]);
 
   const copyInviteLink = useCallback(async () => {
     if (!inviteLink) return;
@@ -268,7 +245,7 @@ export default function OrgUserManagement({ orgId }: { orgId: string }) {
       return (
         <div className="space-y-3">
           {members.map((member) => {
-            const displayName = member.name || member.crewDisplayName || member.email;
+            const displayName = member.name || member.email;
             return (
               <div
                 key={member.membershipId}
@@ -278,16 +255,13 @@ export default function OrgUserManagement({ orgId }: { orgId: string }) {
                   <div>
                     <p className="text-sm font-medium text-text-primary">{displayName}</p>
                     <p className="text-xs text-text-tertiary">{member.email}</p>
-                    {member.crewDisplayName && member.crewDisplayName !== member.name && (
-                      <p className="text-xs text-text-tertiary">Crew: {member.crewDisplayName}</p>
-                    )}
                   </div>
                   <StatusBadge status={member.userStatus} />
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-text-tertiary">
                   <div>
                     <span className="text-text-secondary">Role</span>
-                    <div>{member.roleName || member.roleKey || '-'}</div>
+                    <div>{formatRoleLabel(member.roleKey, member.roleName)}</div>
                   </div>
                   <div>
                     <span className="text-text-secondary">Last login</span>
@@ -328,7 +302,7 @@ export default function OrgUserManagement({ orgId }: { orgId: string }) {
           </thead>
           <tbody>
             {members.map((member) => {
-              const displayName = member.name || member.crewDisplayName || member.email;
+              const displayName = member.name || member.email;
               return (
                 <tr
                   key={member.membershipId}
@@ -337,12 +311,9 @@ export default function OrgUserManagement({ orgId }: { orgId: string }) {
                   <td className="px-4 py-3">
                     <div className="font-medium text-text-primary">{displayName}</div>
                     <div className="text-xs text-text-tertiary">{member.email}</div>
-                    {member.crewDisplayName && member.crewDisplayName !== member.name && (
-                      <div className="text-xs text-text-tertiary">Crew: {member.crewDisplayName}</div>
-                    )}
                   </td>
                   <td className="px-4 py-3 text-text-secondary">
-                    {member.roleName || member.roleKey || '-'}
+                    {formatRoleLabel(member.roleKey, member.roleName)}
                   </td>
                   <td className="px-4 py-3">
                     <StatusBadge status={member.userStatus} />
@@ -368,7 +339,7 @@ export default function OrgUserManagement({ orgId }: { orgId: string }) {
   return (
     <CollapsibleSection
       title="Manage your org"
-      description="Invite teammates and track account status across admins and employees."
+      description="Invite team members and manage access across roles."
       summary={summaryLabel}
       storageKey="settings.section.manage-org"
       actions={
@@ -382,12 +353,11 @@ export default function OrgUserManagement({ orgId }: { orgId: string }) {
           <div className="rounded-md border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">{error}</div>
         )}
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           {[
             { label: 'Members', value: inviteCounts.members },
             { label: 'Active accounts', value: inviteCounts.active },
             { label: 'Pending invites', value: inviteCounts.invited },
-            { label: 'Crew without accounts', value: inviteCounts.crewWithoutAccounts },
           ].map((stat) => (
             <div key={stat.label} className="rounded-md border border-border-subtle bg-bg-section/20 px-4 py-3">
               <p className="text-xs text-text-tertiary">{stat.label}</p>
@@ -401,12 +371,12 @@ export default function OrgUserManagement({ orgId }: { orgId: string }) {
           <div>
             <h3 className="text-sm font-semibold text-text-primary">Invite a teammate</h3>
             <p className="text-xs text-text-tertiary mt-1">
-              Generate an invite link for staff or admins and assign a role.
+              Generate an invite link and assign a role.
             </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <Input
             label="Email"
             value={inviteEmail}
@@ -417,19 +387,7 @@ export default function OrgUserManagement({ orgId }: { orgId: string }) {
             <option value="">Select role</option>
             {roles.map((role) => (
               <option key={role.id} value={role.id}>
-                {role.name}
-              </option>
-            ))}
-          </Select>
-          <Select
-            label="Crew member (optional)"
-            value={inviteCrewMemberId}
-            onChange={(e) => setInviteCrewMemberId(e.target.value)}
-          >
-            <option value="">No crew link</option>
-            {crewWithoutAccounts.map((crew) => (
-              <option key={crew.id} value={crew.id}>
-                {crew.displayName}
+                {formatRoleLabel(role.key, role.name)}
               </option>
             ))}
           </Select>
@@ -476,7 +434,7 @@ export default function OrgUserManagement({ orgId }: { orgId: string }) {
         <div className="flex items-start justify-between gap-2 mb-4">
           <div>
             <h3 className="text-sm font-semibold text-text-primary">Members</h3>
-            <p className="text-xs text-text-tertiary mt-1">Account status, activity, and crew linkage.</p>
+            <p className="text-xs text-text-tertiary mt-1">Account status and activity across the team.</p>
           </div>
         </div>
         {renderMembers()}
@@ -506,8 +464,7 @@ export default function OrgUserManagement({ orgId }: { orgId: string }) {
                     <div>
                       <p className="text-sm font-medium text-text-primary">{invite.email}</p>
                       <p className="text-xs text-text-tertiary">
-                        {invite.roleName || invite.roleKey || 'Role'} -{' '}
-                        {invite.crewDisplayName ? `Crew: ${invite.crewDisplayName}` : 'No crew link'}
+                        {formatRoleLabel(invite.roleKey, invite.roleName)}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -532,87 +489,6 @@ export default function OrgUserManagement({ orgId }: { orgId: string }) {
         )}
         </div>
 
-        <div className="border-t border-border-subtle pt-5">
-        <div className="flex items-start justify-between gap-2 mb-4">
-          <div>
-            <h3 className="text-sm font-semibold text-text-primary">Crew without accounts</h3>
-            <p className="text-xs text-text-tertiary mt-1">
-              Track employees who still need a login.
-            </p>
-          </div>
-        </div>
-
-        {loading ? (
-          <p className="text-sm text-text-tertiary">Loading crew list...</p>
-        ) : crewWithoutAccounts.length === 0 ? (
-          <p className="text-sm text-text-tertiary">All crew members have accounts.</p>
-        ) : (
-          <div className="space-y-2">
-            {crewWithoutAccounts.map((crew) => {
-              const pendingInvite = pendingInvitesByCrewId.get(crew.id);
-              const resolvedRoleId = defaultRoleId || inviteRoleId;
-              const actionDisabled = inviteLoading || !crew.email || !resolvedRoleId;
-              return (
-                <div
-                  key={crew.id}
-                  className="rounded-md border border-border-subtle bg-bg-section/20 px-3 py-3"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <p className="text-sm font-medium text-text-primary">{crew.displayName}</p>
-                      <p className="text-xs text-text-tertiary">
-                        {crew.role} - {crew.email || 'No email on file'}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <StatusBadge status={crew.active ? 'active' : 'inactive'} />
-                      {pendingInvite ? (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => void sendInvite({ inviteId: pendingInvite.id })}
-                          disabled={inviteLoading}
-                        >
-                          {inviteLoading ? 'Working...' : 'Resend invite'}
-                        </Button>
-                      ) : crew.email ? (
-                        <Button
-                          size="sm"
-                          onClick={() =>
-                            void sendInvite({
-                              email: crew.email ?? undefined,
-                              roleId: resolvedRoleId,
-                              crewMemberId: crew.id,
-                            })
-                          }
-                          disabled={actionDisabled}
-                        >
-                          {inviteLoading ? 'Sending...' : 'Invite'}
-                        </Button>
-                      ) : (
-                        <Badge variant="muted">Add email to invite</Badge>
-                      )}
-                      {crew.id && (
-                        <Link
-                          href={`/crews/${crew.id}?orgId=${orgId}`}
-                          className="text-xs text-text-tertiary hover:text-text-primary"
-                        >
-                          View profile
-                        </Link>
-                      )}
-                    </div>
-                  </div>
-                  {pendingInvite && (
-                    <div className="mt-2 text-xs text-text-tertiary">
-                      Invite sent {formatDate(pendingInvite.createdAt)}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-        </div>
       </div>
     </CollapsibleSection>
   );

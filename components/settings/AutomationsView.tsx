@@ -8,6 +8,8 @@ import { cn } from '@/lib/utils';
 import { getValueByPath, setValueByPath } from '@/lib/automations/utils';
 import type { AutomationActionNode, AutomationTemplate, RecipientReference } from '@/lib/automations/types';
 import { Bell, Mail, MessageSquare, Settings } from 'lucide-react';
+import type { AppEdition } from '@/lib/appEdition';
+import { getAppEdition } from '@/lib/appEdition';
 import AutomationsBuilderSection from '@/components/settings/AutomationsBuilderSection';
 import RunsTable from '@/components/settings/RunsTable';
 import type { CustomAutomationRule } from '@/components/settings/automation-builder/types';
@@ -88,13 +90,22 @@ type EditorState = {
   ruleId?: string;
 };
 
-const RECIPIENT_OPTIONS = [
-  { value: 'job.client', label: 'Job client' },
-  { value: 'job.site_contacts', label: 'Job site contacts' },
-  { value: 'crew.assigned', label: 'Assigned crew' },
-  { value: 'org.admins', label: 'Admins and managers' },
-  { value: 'org.staff', label: 'All staff' },
-];
+const RECIPIENT_OPTIONS_BY_EDITION: Record<AppEdition, { value: string; label: string }[]> = {
+  trades: [
+    { value: 'job.client', label: 'Job client' },
+    { value: 'job.site_contacts', label: 'Job site contacts' },
+    { value: 'crew.assigned', label: 'Assigned crew' },
+    { value: 'org.admins', label: 'Admins and managers' },
+    { value: 'org.staff', label: 'All staff' },
+  ],
+  real_estate: [
+    { value: 'contact.owner', label: 'Contact owner' },
+    { value: 'appraisal.owner', label: 'Appraisal owner' },
+    { value: 'listing.owner', label: 'Listing owner' },
+    { value: 'org.admins', label: 'Principals / Team Leads' },
+    { value: 'org.staff', label: 'All staff' },
+  ],
+};
 
 const CATEGORY_LABELS: Record<string, string> = {
   communications: 'Communications',
@@ -102,6 +113,10 @@ const CATEGORY_LABELS: Record<string, string> = {
   materials: 'Materials',
   progress: 'Progress',
   safety: 'Safety',
+  contacts: 'Contacts',
+  appraisals: 'Appraisals',
+  listings: 'Listings',
+  reports: 'Reports',
 };
 
 const runStatusMeta: Record<string, { label: string; className: string }> = {
@@ -229,6 +244,11 @@ export default function AutomationsView({ orgId }: { orgId: string }) {
   const [runDetailLoading, setRunDetailLoading] = useState(false);
   const [retryingOutboxId, setRetryingOutboxId] = useState<string | null>(null);
   const isMobile = useIsMobile();
+  const edition = getAppEdition();
+  const recipientOptions = useMemo(
+    () => RECIPIENT_OPTIONS_BY_EDITION[edition] ?? RECIPIENT_OPTIONS_BY_EDITION.real_estate,
+    [edition]
+  );
 
   const templatesByKey = useMemo(() => new Map(templates.map((template) => [template.key, template])), [templates]);
 
@@ -1018,7 +1038,7 @@ export default function AutomationsView({ orgId }: { orgId: string }) {
                               <div key={field.key} className="space-y-2">
                                 <p className="text-sm font-medium text-text-primary">{field.label}</p>
                                 <div className="flex flex-wrap gap-2">
-                                  {RECIPIENT_OPTIONS.map((option) => (
+                                  {recipientOptions.map((option) => (
                                     <Chip
                                       key={option.value}
                                       active={refSet.has(option.value)}

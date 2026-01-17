@@ -41,6 +41,16 @@ const TRIGGER_KEY_TO_EVENT_KEY: Record<TriggerKey, string> = {
   'payment.recorded': 'payment.recorded',
   'material.stock_low': 'material.stock.low',
   'material.stock_updated': 'material.stock.updated',
+  'contact.followup_overdue': 'contact.followup_overdue',
+  'contact.seller_intent_hot': 'contact.seller_intent_hot',
+  'appraisal.upcoming_24h': 'appraisal.upcoming_24h',
+  'appraisal.followup_due': 'appraisal.followup_due',
+  'appraisal.stage_changed': 'appraisal.stage_changed',
+  'listing.milestone_overdue': 'listing.milestone_overdue',
+  'listing.vendor_report_due': 'listing.vendor_report_due',
+  'listing.vendor_update_overdue': 'listing.vendor_update_overdue',
+  'listing.health_stalling': 'listing.health_stalling',
+  'report.generated': 'report.generated',
   'time.daily': 'time.daily',
 };
 

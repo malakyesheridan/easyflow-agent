@@ -13,12 +13,17 @@ import { scheduleAssignments } from '@/db/schema/schedule_assignments';
 import { jobContacts } from '@/db/schema/job_contacts';
 import { jobInvoices } from '@/db/schema/job_invoices';
 import { jobPayments } from '@/db/schema/job_payments';
+import { contacts } from '@/db/schema/contacts';
+import { listings } from '@/db/schema/listings';
+import { appraisals } from '@/db/schema/appraisals';
+import { listingReports } from '@/db/schema/listing_reports';
 import { announcements } from '@/db/schema/announcements';
 import { assignmentToDateRange } from '@/lib/utils/scheduleTime';
 import { renderEmailHtml, renderTemplate } from '@/lib/communications/renderer';
 import { seedCommDefaults } from '@/lib/communications/seed';
 import type { CommChannel, CommRecipientType, CommDeliveryMode, RecipientRules, TimingRules } from '@/lib/communications/types';
 import { isValidEmail, parseAdditionalEmails, resolveSenderIdentity } from '@/lib/communications/sender';
+import { getBaseUrl } from '@/lib/url';
 import { createHash } from 'crypto';
 
 type DbClient = {
@@ -131,15 +136,38 @@ function formatCurrency(amountCents?: number | null, currency?: string | null): 
   return `${currency || 'AUD'} ${amount}`;
 }
 
-function getBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-}
-
-function buildAppLink(params: { entityType: string; entityId: string; orgId: string; jobId?: string | null }): string {
+function buildAppLink(params: {
+  entityType: string;
+  entityId: string;
+  orgId: string;
+  jobId?: string | null;
+  contactId?: string | null;
+  appraisalId?: string | null;
+  listingId?: string | null;
+  reportId?: string | null;
+  reportToken?: string | null;
+}): string {
   const baseUrl = getBaseUrl();
   const orgQuery = `?orgId=${params.orgId}`;
   if (params.entityType === 'announcement') {
     return `${baseUrl}/announcements${orgQuery}`;
+  }
+  if (params.entityType === 'contact' || params.contactId) {
+    const contactId = params.entityType === 'contact' ? params.entityId : params.contactId;
+    if (contactId) return `${baseUrl}/contacts/${contactId}${orgQuery}`;
+  }
+  if (params.entityType === 'appraisal' || params.appraisalId) {
+    const appraisalId = params.entityType === 'appraisal' ? params.entityId : params.appraisalId;
+    if (appraisalId) return `${baseUrl}/appraisals/${appraisalId}${orgQuery}`;
+  }
+  if (params.entityType === 'listing' || params.listingId) {
+    const listingId = params.entityType === 'listing' ? params.entityId : params.listingId;
+    if (listingId) return `${baseUrl}/listings/${listingId}${orgQuery}`;
+  }
+  if (params.entityType === 'report' || params.reportId || params.reportToken) {
+    if (params.reportToken) return `${baseUrl}/reports/vendor/${params.reportToken}`;
+    const reportId = params.entityType === 'report' ? params.entityId : params.reportId;
+    if (reportId) return `${baseUrl}/reports${orgQuery}`;
   }
   const jobId = params.entityType === 'job' ? params.entityId : params.jobId;
   if (jobId) {
@@ -529,8 +557,70 @@ export async function planCommMessages(params: {
   const deliveryMode: CommDeliveryMode | null = preference.deliveryMode === 'digest' ? 'digest' : 'instant';
 
   const jobId = event.entityType === 'job' ? event.entityId : payload?.jobId ?? null;
+  const contactId = event.entityType === 'contact' ? event.entityId : payload?.contactId ?? null;
+  const appraisalId = event.entityType === 'appraisal' ? event.entityId : payload?.appraisalId ?? null;
+  const listingId = event.entityType === 'listing' ? event.entityId : payload?.listingId ?? null;
+  const reportId = event.entityType === 'report' ? event.entityId : payload?.reportId ?? null;
+  const reportToken = payload?.reportToken ?? payload?.shareToken ?? null;
   const assignmentId = payload?.assignmentId ?? null;
   const jobContext = jobId ? await loadJobContext(db, event.orgId, jobId, assignmentId) : null;
+
+  let reportRow: any = null;
+  if (reportId) {
+    [reportRow] = await db
+      .select()
+      .from(listingReports)
+      .where(and(eq(listingReports.orgId, event.orgId), eq(listingReports.id, reportId)))
+      .limit(1);
+  } else if (reportToken) {
+    [reportRow] = await db
+      .select()
+      .from(listingReports)
+      .where(and(eq(listingReports.orgId, event.orgId), eq(listingReports.shareToken, reportToken)))
+      .limit(1);
+  }
+
+  const resolvedListingId =
+    listingId ??
+    (reportRow?.listingId ? String(reportRow.listingId) : null);
+
+  const [listingRow] = resolvedListingId
+    ? await db
+        .select()
+        .from(listings)
+        .where(and(eq(listings.orgId, event.orgId), eq(listings.id, resolvedListingId)))
+        .limit(1)
+    : [null];
+
+  const [appraisalRow] = appraisalId
+    ? await db
+        .select()
+        .from(appraisals)
+        .where(and(eq(appraisals.orgId, event.orgId), eq(appraisals.id, appraisalId)))
+        .limit(1)
+    : [null];
+
+  let contactRow: any = null;
+  if (contactId) {
+    [contactRow] = await db
+      .select()
+      .from(contacts)
+      .where(and(eq(contacts.orgId, event.orgId), eq(contacts.id, contactId)))
+      .limit(1);
+  }
+
+  if (!contactRow) {
+    const fallbackContactId =
+      (listingRow?.vendorContactId ? String(listingRow.vendorContactId) : null) ??
+      (appraisalRow?.contactId ? String(appraisalRow.contactId) : null);
+    if (fallbackContactId) {
+      [contactRow] = await db
+        .select()
+        .from(contacts)
+        .where(and(eq(contacts.orgId, event.orgId), eq(contacts.id, fallbackContactId)))
+        .limit(1);
+    }
+  }
 
   const { org, commFromName, commFromEmail, commReplyToEmail } = await loadOrgContext(db, event.orgId);
   const senderIdentity = resolveSenderIdentity({
@@ -595,7 +685,17 @@ export async function planCommMessages(params: {
   );
 
   const links = {
-    appEntityUrl: buildAppLink({ entityType: event.entityType, entityId: event.entityId, orgId: event.orgId, jobId }),
+    appEntityUrl: buildAppLink({
+      entityType: event.entityType,
+      entityId: event.entityId,
+      orgId: event.orgId,
+      jobId,
+      contactId,
+      appraisalId,
+      listingId: resolvedListingId ?? listingId,
+      reportId,
+      reportToken,
+    }),
     mapsUrl: jobContext?.address ? buildMapsLink(jobContext.address) : null,
   };
 
@@ -608,6 +708,46 @@ export async function planCommMessages(params: {
       actor: actorContext.actor,
       now: new Date().toISOString(),
       links,
+      contact: contactRow
+        ? {
+            id: contactRow.id,
+            fullName: contactRow.fullName ?? null,
+            email: contactRow.email ?? null,
+            phone: contactRow.phone ?? null,
+            suburb: contactRow.suburb ?? null,
+            nextTouchAt: contactRow.nextTouchAt?.toISOString?.() ?? null,
+            lastTouchAt: contactRow.lastTouchAt?.toISOString?.() ?? null,
+          }
+        : null,
+      appraisal: appraisalRow
+        ? {
+            id: appraisalRow.id,
+            appointmentAt: appraisalRow.appointmentAt?.toISOString?.() ?? null,
+            stage: appraisalRow.stage ?? null,
+            address: appraisalRow.address ?? null,
+            suburb: appraisalRow.suburb ?? null,
+          }
+        : null,
+      listing: listingRow
+        ? {
+            id: listingRow.id,
+            addressLine1: listingRow.addressLine1 ?? null,
+            suburb: listingRow.suburb ?? null,
+            status: listingRow.status ?? null,
+            listedAt: listingRow.listedAt?.toISOString?.() ?? null,
+            reportLastSentAt: listingRow.reportLastSentAt?.toISOString?.() ?? null,
+            reportNextDueAt: listingRow.reportNextDueAt?.toISOString?.() ?? null,
+            campaignHealthScore: listingRow.campaignHealthScore ?? null,
+          }
+        : null,
+      report: reportRow
+        ? {
+            id: reportRow.id,
+            listingId: reportRow.listingId ?? null,
+            shareToken: reportRow.shareToken ?? null,
+            createdAt: reportRow.createdAt?.toISOString?.() ?? null,
+          }
+        : null,
       job: jobContext?.job
         ? {
             id: jobContext.job.id,

@@ -9,6 +9,7 @@ import { passwordResets } from '@/db/schema/password_resets';
 import { rateLimit, getClientId } from '@/lib/security/rateLimit';
 import { sendResendEmail } from '@/lib/communications/providers/resend';
 import { getDefaultSenderIdentity, isValidEmail } from '@/lib/communications/sender';
+import { getBaseUrl } from '@/lib/url';
 
 const forgotSchema = z.object({
   email: z.string().trim().email('Valid email is required'),
@@ -71,8 +72,7 @@ export async function POST(req: Request): Promise<Response> {
       responsePayload.resetToken = token;
     }
 
-    const origin = req.headers.get('origin');
-    const baseUrl = origin || process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+    const baseUrl = getBaseUrl(req) || req.headers.get('origin') || 'http://localhost:3000';
     const resetUrl = `${baseUrl.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(token)}`;
     const sender = getDefaultSenderIdentity();
     const fromEmail = sender.fromEmail && isValidEmail(sender.fromEmail) ? sender.fromEmail : null;

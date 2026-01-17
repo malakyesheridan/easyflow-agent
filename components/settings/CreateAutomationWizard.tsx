@@ -8,7 +8,14 @@ import { cn } from '@/lib/utils';
 import type { AutomationRuleDraft, RuleAction, RuleCondition, TriggerKey } from '@/lib/automationRules/types';
 import type { ConditionDefinition } from '@/lib/automationRules/conditionsRegistry';
 import { CONDITIONS_BY_TRIGGER, getConditionDefinition } from '@/lib/automationRules/conditionsRegistry';
-import { TRIGGER_GROUPS, TRIGGER_LABELS, COMM_DEFAULT_TEMPLATE_BY_TO } from '@/components/settings/automation-builder/constants';
+import {
+  ACTION_LABELS,
+  COMM_DEFAULT_TEMPLATE_BY_TO,
+  getActionOptionsForEdition,
+  getTriggerGroupsForEdition,
+  TRIGGER_LABELS,
+} from '@/components/settings/automation-builder/constants';
+import { getAppEdition } from '@/lib/appEdition';
 
 const MAX_CONDITIONS = 10;
 const MAX_ACTIONS = 5;
@@ -71,7 +78,10 @@ function buildDefaultCondition(triggerKey: TriggerKey): RuleCondition {
   return { key: definition.key, value: defaultValueForDefinition(definition) };
 }
 
-function buildDefaultAction(): RuleAction {
+function buildDefaultAction(isTradeEdition: boolean): RuleAction {
+  if (!isTradeEdition) {
+    return { type: 'comm.send_inapp', to: 'admin', templateKey: COMM_DEFAULT_TEMPLATE_BY_TO.admin };
+  }
   return { type: 'comm.send_email', to: 'customer', templateKey: COMM_DEFAULT_TEMPLATE_BY_TO.customer };
 }
 
@@ -119,15 +129,19 @@ export default function CreateAutomationWizard(props: {
   initialDraft?: AutomationRuleDraft;
 }) {
   const { open, orgId, templates, providerStatus, crewOptions, materialCategoryOptions, onClose, onCreated, initialDraft } = props;
+  const edition = getAppEdition();
+  const isTradeEdition = edition === 'trades';
+  const defaultTriggerKey: TriggerKey = isTradeEdition ? 'job.created' : 'contact.followup_overdue';
+  const actionOptions = getActionOptionsForEdition(edition);
   const [step, setStep] = useState(1);
   const [draft, setDraft] = useState<AutomationRuleDraft>(
     initialDraft ?? {
       name: '',
       description: '',
-      triggerKey: 'job.created',
+      triggerKey: defaultTriggerKey,
       triggerVersion: 1,
       conditions: [],
-      actions: [buildDefaultAction()],
+      actions: [buildDefaultAction(isTradeEdition)],
     }
   );
   const [ruleId, setRuleId] = useState<string | null>(null);
@@ -143,6 +157,12 @@ export default function CreateAutomationWizard(props: {
     if (!saving && !testing && !enabling) onClose();
   }, isMobile);
 
+  const triggerGroups = useMemo(() => {
+    const base = getTriggerGroupsForEdition(edition);
+    const currentGroup = TRIGGER_LABELS[draft.triggerKey]?.group;
+    if (currentGroup && !base.includes(currentGroup)) return [...base, currentGroup];
+    return base;
+  }, [draft.triggerKey, edition]);
   const triggerMeta = TRIGGER_LABELS[draft.triggerKey];
   const customerFacing = isCustomerFacing(draft.actions);
   const statusTriggerMissing = draft.triggerKey === 'job.status_updated' && !hasStatusCondition(draft.conditions);
@@ -159,6 +179,35 @@ export default function CreateAutomationWizard(props: {
     if (!testResult) return null;
     return testResult.actionPreviews.length > 0;
   }, [testResult]);
+
+  const emailRecipientOptions = useMemo(() => {
+    if (isTradeEdition) {
+      return [
+        { value: 'customer', label: 'Customer' },
+        { value: 'admin', label: 'Admins' },
+        { value: 'crew_assigned', label: 'Assigned crew' },
+        { value: 'custom', label: 'Custom' },
+      ];
+    }
+    return [
+      { value: 'admin', label: 'Principals / Team Leads' },
+      { value: 'custom', label: 'Custom' },
+    ];
+  }, [isTradeEdition]);
+
+  const inAppRecipientOptions = useMemo(() => {
+    if (isTradeEdition) {
+      return [
+        { value: 'admin', label: 'Admins' },
+        { value: 'crew_assigned', label: 'Assigned crew' },
+        { value: 'ops', label: 'Ops team' },
+      ];
+    }
+    return [
+      { value: 'admin', label: 'Principals / Team Leads' },
+      { value: 'ops', label: 'Ops team' },
+    ];
+  }, [isTradeEdition]);
 
   if (!open) return null;
 
@@ -190,7 +239,7 @@ export default function CreateAutomationWizard(props: {
 
   const addAction = () => {
     if (draft.actions.length >= MAX_ACTIONS) return;
-    setDraft((prev) => ({ ...prev, actions: [...prev.actions, buildDefaultAction()] }));
+    setDraft((prev) => ({ ...prev, actions: [...prev.actions, buildDefaultAction(isTradeEdition)] }));
   };
 
   const removeCondition = (index: number) => {
@@ -329,7 +378,7 @@ export default function CreateAutomationWizard(props: {
                     setDraft((prev) => ({ ...prev, triggerKey: nextKey, conditions: [] }));
                   }}
                 >
-                  {TRIGGER_GROUPS.map((group) => (
+                  {triggerGroups.map((group) => (
                     <optgroup key={group} label={group}>
                       {Object.entries(TRIGGER_LABELS)
                         .filter(([, meta]) => meta.group === group)
@@ -583,22 +632,33 @@ export default function CreateAutomationWizard(props: {
                     commAction &&
                     (commAction.type === 'comm.send_email' || commAction.type === 'comm.send_sms') &&
                     commAction.to === 'customer';
+                  const baseRecipientOptions =
+                    commAction && commAction.type === 'comm.send_inapp'
+                      ? inAppRecipientOptions
+                      : emailRecipientOptions;
+                  const recipientOptions =
+                    commAction && !baseRecipientOptions.some((opt) => opt.value === commAction.to)
+                      ? [
+                          ...baseRecipientOptions,
+                          { value: commAction.to, label: `Legacy: ${commAction.to.replace(/_/g, ' ')}` },
+                        ]
+                      : baseRecipientOptions;
                   return (
                     <Card key={`${action.type}-${index}`} className="space-y-2">
-                      <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start justify-between gap-2">
                         <Select
                           label="Action"
                           value={action.type}
                           onChange={(e) => updateAction(index, buildDefaultActionWithType(e.target.value as RuleAction['type']))}
                         >
-                          <option value="comm.send_email">Send email</option>
-                          <option value="comm.send_sms">Send SMS</option>
-                          <option value="comm.send_inapp">Send in-app notification</option>
-                          <option value="job.add_tag">Add job tag</option>
-                          <option value="job.add_flag">Add job flag</option>
-                          <option value="tasks.create_checklist">Create checklist tasks</option>
-                          <option value="invoice.create_draft">Create draft invoice</option>
-                          <option value="reminder.create_internal">Create internal reminder</option>
+                          {(actionOptions.includes(action.type)
+                            ? actionOptions
+                            : [...actionOptions, action.type]
+                          ).map((type) => (
+                            <option key={type} value={type}>
+                              {ACTION_LABELS[type] ?? type}
+                            </option>
+                          ))}
                         </Select>
                         <Button size="sm" variant="secondary" onClick={() => removeAction(index)}>
                           Remove
@@ -616,11 +676,11 @@ export default function CreateAutomationWizard(props: {
                               updateAction(index, { ...commAction, to, templateKey } as RuleAction);
                             }}
                           >
-                            {commAction.type !== 'comm.send_inapp' && <option value="customer">Customer</option>}
-                            <option value="admin">Admins</option>
-                            <option value="crew_assigned">Assigned crew</option>
-                            {commAction.type !== 'comm.send_inapp' && <option value="custom">Custom</option>}
-                            {commAction.type === 'comm.send_inapp' && <option value="ops">Ops team</option>}
+                            {recipientOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
                           </Select>
                           <Select
                             label="Template"
@@ -791,17 +851,18 @@ export default function CreateAutomationWizard(props: {
   );
 
   function buildDefaultActionWithType(type: RuleAction['type']): RuleAction {
+    const defaultRecipient = isTradeEdition ? 'customer' : 'admin';
     if (type === 'comm.send_sms') {
-      return { type, to: 'customer', templateKey: COMM_DEFAULT_TEMPLATE_BY_TO.customer };
+      return { type, to: defaultRecipient, templateKey: COMM_DEFAULT_TEMPLATE_BY_TO[defaultRecipient] ?? COMM_DEFAULT_TEMPLATE_BY_TO.admin };
     }
     if (type === 'comm.send_inapp') {
-      return { type, to: 'ops', templateKey: COMM_DEFAULT_TEMPLATE_BY_TO.ops };
+      return { type, to: 'admin', templateKey: COMM_DEFAULT_TEMPLATE_BY_TO.admin };
     }
     if (type === 'job.add_tag') return { type, tag: 'needs_attention' };
     if (type === 'job.add_flag') return { type, flag: 'needs_attention' };
     if (type === 'tasks.create_checklist') return { type, checklistKey: '' };
     if (type === 'invoice.create_draft') return { type, mode: 'from_job' };
     if (type === 'reminder.create_internal') return { type, minutesFromNow: 60, message: '' };
-    return { type: 'comm.send_email', to: 'customer', templateKey: COMM_DEFAULT_TEMPLATE_BY_TO.customer };
+    return { type: 'comm.send_email', to: defaultRecipient, templateKey: COMM_DEFAULT_TEMPLATE_BY_TO[defaultRecipient] ?? COMM_DEFAULT_TEMPLATE_BY_TO.admin };
   }
 }

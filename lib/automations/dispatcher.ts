@@ -120,6 +120,54 @@ function normalizeRecipients(refs: RecipientReference[] | undefined, context: Au
           }
         }
       }
+      if (ref.ref === 'contact.owner') {
+        const ownerId = (context.contact as { ownerUserId?: string | null } | null)?.ownerUserId ?? null;
+        if (ownerId) {
+          const owner = context.orgUsers.find((user) => user.userId === ownerId);
+          if (owner) {
+            resolved.push({
+              type: 'user',
+              userId: owner.userId,
+              email: owner.email ?? null,
+              name: owner.name ?? null,
+              roleKey: owner.roleKey ?? null,
+              crewMemberId: owner.crewMemberId ?? null,
+            });
+          }
+        }
+      }
+      if (ref.ref === 'appraisal.owner') {
+        const ownerId = (context.appraisal as { ownerUserId?: string | null } | null)?.ownerUserId ?? null;
+        if (ownerId) {
+          const owner = context.orgUsers.find((user) => user.userId === ownerId);
+          if (owner) {
+            resolved.push({
+              type: 'user',
+              userId: owner.userId,
+              email: owner.email ?? null,
+              name: owner.name ?? null,
+              roleKey: owner.roleKey ?? null,
+              crewMemberId: owner.crewMemberId ?? null,
+            });
+          }
+        }
+      }
+      if (ref.ref === 'listing.owner') {
+        const ownerId = (context.listing as { ownerUserId?: string | null } | null)?.ownerUserId ?? null;
+        if (ownerId) {
+          const owner = context.orgUsers.find((user) => user.userId === ownerId);
+          if (owner) {
+            resolved.push({
+              type: 'user',
+              userId: owner.userId,
+              email: owner.email ?? null,
+              name: owner.name ?? null,
+              roleKey: owner.roleKey ?? null,
+              crewMemberId: owner.crewMemberId ?? null,
+            });
+          }
+        }
+      }
       if (ref.ref === 'org.staff') {
         for (const user of context.orgUsers) {
           resolved.push({

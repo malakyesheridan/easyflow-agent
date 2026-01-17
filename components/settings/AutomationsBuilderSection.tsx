@@ -7,6 +7,7 @@ import CreateAutomationWizard from '@/components/settings/CreateAutomationWizard
 import RuleDetailsDrawer from '@/components/settings/RuleDetailsDrawer';
 import type { CustomAutomationRule } from '@/components/settings/automation-builder/types';
 import type { AutomationRuleDraft } from '@/lib/automationRules/types';
+import { getAppEdition } from '@/lib/appEdition';
 
 type ApiResponse<T> = { ok: true; data: T } | { ok: false; error: any };
 
@@ -49,6 +50,7 @@ export default function AutomationsBuilderSection(props: {
   const [busyRuleId, setBusyRuleId] = useState<string | null>(null);
   const [crewOptions, setCrewOptions] = useState<SelectOption[]>([]);
   const [materialCategoryOptions, setMaterialCategoryOptions] = useState<SelectOption[]>([]);
+  const isTradeEdition = getAppEdition() === 'trades';
 
   const loadTemplates = useCallback(async () => {
     try {
@@ -122,9 +124,14 @@ export default function AutomationsBuilderSection(props: {
     void loadTemplates();
     void loadProviders();
     void loadSettings();
-    void loadCrewOptions();
-    void loadMaterialCategories();
-  }, [loadCrewOptions, loadMaterialCategories, loadProviders, loadSettings, loadTemplates]);
+    if (isTradeEdition) {
+      void loadCrewOptions();
+      void loadMaterialCategories();
+    } else {
+      setCrewOptions([]);
+      setMaterialCategoryOptions([]);
+    }
+  }, [isTradeEdition, loadCrewOptions, loadMaterialCategories, loadProviders, loadSettings, loadTemplates]);
 
   useEffect(() => {
     if (!detailsRule) return;

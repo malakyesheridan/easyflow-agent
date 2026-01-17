@@ -1,8 +1,59 @@
 import type { RuleAction, TriggerKey } from '@/lib/automationRules/types';
 import { TRIGGER_KEYS } from '@/lib/automationRules/types';
 import { CONDITIONS_BY_TRIGGER, CONDITION_DEFINITIONS_BY_KEY } from '@/lib/automationRules/conditionsRegistry';
+import type { AppEdition } from '@/lib/appEdition';
 
 export const TRIGGER_LABELS: Record<TriggerKey, { label: string; description: string; group: string }> = {
+  'contact.followup_overdue': {
+    label: 'Contact follow-up overdue',
+    description: 'A contact follow-up is overdue.',
+    group: 'Contacts',
+  },
+  'contact.seller_intent_hot': {
+    label: 'Seller intent hot',
+    description: 'Seller intent crosses the hot threshold.',
+    group: 'Contacts',
+  },
+  'appraisal.upcoming_24h': {
+    label: 'Appraisal upcoming (24h)',
+    description: 'An appraisal appointment is within 24 hours.',
+    group: 'Appraisals',
+  },
+  'appraisal.followup_due': {
+    label: 'Appraisal follow-up due',
+    description: 'An appraisal follow-up task is due.',
+    group: 'Appraisals',
+  },
+  'appraisal.stage_changed': {
+    label: 'Appraisal stage changed',
+    description: 'An appraisal stage changes.',
+    group: 'Appraisals',
+  },
+  'listing.milestone_overdue': {
+    label: 'Listing milestone overdue',
+    description: 'A listing milestone is overdue.',
+    group: 'Listings',
+  },
+  'listing.vendor_report_due': {
+    label: 'Vendor report due',
+    description: 'A vendor report is due for a listing.',
+    group: 'Reports',
+  },
+  'listing.vendor_update_overdue': {
+    label: 'Vendor update overdue',
+    description: 'Vendor updates are overdue for a listing.',
+    group: 'Reports',
+  },
+  'listing.health_stalling': {
+    label: 'Listing health stalling',
+    description: 'Campaign health drops below the stalling threshold.',
+    group: 'Listings',
+  },
+  'report.generated': {
+    label: 'Vendor report generated',
+    description: 'A vendor report is generated and shared.',
+    group: 'Reports',
+  },
   'job.created': { label: 'Job created', description: 'A job is created.', group: 'Jobs' },
   'job.assigned': { label: 'Job assigned', description: 'A job is assigned to a crew.', group: 'Jobs' },
   'job.rescheduled': { label: 'Job rescheduled', description: 'A job assignment is rescheduled.', group: 'Jobs' },
@@ -22,7 +73,16 @@ export const TRIGGER_LABELS: Record<TriggerKey, { label: string; description: st
   'time.daily': { label: 'Daily time trigger', description: 'Runs once per day (time-based).', group: 'Time' },
 };
 
-export const TRIGGER_GROUPS = ['Jobs', 'Materials', 'Billing', 'Time'];
+export const TRIGGER_GROUPS = ['Contacts', 'Appraisals', 'Listings', 'Reports', 'Jobs', 'Materials', 'Billing', 'Time'];
+
+export const TRIGGER_GROUPS_BY_EDITION: Record<AppEdition, string[]> = {
+  real_estate: ['Contacts', 'Appraisals', 'Listings', 'Reports', 'Time'],
+  trades: ['Jobs', 'Materials', 'Billing', 'Time'],
+};
+
+export function getTriggerGroupsForEdition(edition: AppEdition): string[] {
+  return TRIGGER_GROUPS_BY_EDITION[edition] ?? TRIGGER_GROUPS;
+}
 
 export const CONDITION_LABELS: Record<string, string> = Object.fromEntries(
   Object.entries(CONDITION_DEFINITIONS_BY_KEY).map(([key, definition]) => [key, definition.label])
@@ -67,3 +127,12 @@ export const ACTION_ORDER: RuleAction['type'][] = [
 ];
 
 export const TRIGGER_KEYS_LIST = TRIGGER_KEYS;
+
+export const ACTION_OPTIONS_BY_EDITION: Record<AppEdition, RuleAction['type'][]> = {
+  real_estate: ['comm.send_email', 'comm.send_sms', 'comm.send_inapp', 'reminder.create_internal'],
+  trades: ACTION_ORDER,
+};
+
+export function getActionOptionsForEdition(edition: AppEdition): RuleAction['type'][] {
+  return ACTION_OPTIONS_BY_EDITION[edition] ?? ACTION_ORDER;
+}

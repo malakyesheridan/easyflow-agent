@@ -12,10 +12,11 @@ export default function SettingsPage({
 }) {
   const orgId = getOrgIdFromSearchParams(searchParams);
   const appVersion = packageJson.version;
+  const notice = typeof searchParams?.notice === 'string' ? searchParams.notice : undefined;
   return (
     <PageContainer>
       <PageHeader title="Settings" subtitle="Organisation defaults and operational preferences." />
-      <SettingsView orgId={orgId} appVersion={appVersion} />
+      <SettingsView orgId={orgId} appVersion={appVersion} notice={notice} />
     </PageContainer>
   );
 }

@@ -12,6 +12,7 @@ import useIsMobile from '@/hooks/useIsMobile';
 import useSwipeToClose from '@/hooks/useSwipeToClose';
 import { cn } from '@/lib/utils';
 import OrgUserManagement from '@/components/settings/OrgUserManagement';
+import { getAppEdition } from '@/lib/appEdition';
 
 type ApiResponse<T> = { ok: true; data: T } | { ok: false; error: any };
 
@@ -106,7 +107,15 @@ function SettingsSkeleton() {
   );
 }
 
-export default function SettingsView({ orgId, appVersion }: { orgId: string; appVersion?: string }) {
+export default function SettingsView({
+  orgId,
+  appVersion,
+  notice,
+}: {
+  orgId: string;
+  appVersion?: string;
+  notice?: string;
+}) {
   const [row, setRow] = useState<OrgSettingsRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -168,6 +177,12 @@ export default function SettingsView({ orgId, appVersion }: { orgId: string; app
 
   const logoInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<{
+    enabled: boolean;
+    missing?: { url?: boolean; serviceRole?: boolean; bucket?: boolean };
+  } | null>(null);
+
+  const isTradeEdition = getAppEdition() === 'trades';
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -272,6 +287,20 @@ export default function SettingsView({ orgId, appVersion }: { orgId: string; app
     }
   }, [orgId]);
 
+  const loadUploadStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/uploads/status?orgId=${orgId}`);
+      const json = (await res.json()) as ApiResponse<{
+        enabled: boolean;
+        missing?: { url?: boolean; serviceRole?: boolean; bucket?: boolean };
+      }>;
+      if (!res.ok || !json.ok) throw new Error('Failed to load upload status');
+      setUploadStatus(json.data);
+    } catch {
+      setUploadStatus(null);
+    }
+  }, [orgId]);
+
   const loadModifiers = useCallback(async () => {
     setModifiersLoading(true);
     setModifiersError(null);
@@ -329,8 +358,14 @@ export default function SettingsView({ orgId, appVersion }: { orgId: string; app
   }, [loadBranding]);
 
   useEffect(() => {
-    void loadModifiers();
-  }, [loadModifiers]);
+    void loadUploadStatus();
+  }, [loadUploadStatus]);
+
+  useEffect(() => {
+    if (isTradeEdition) {
+      void loadModifiers();
+    }
+  }, [isTradeEdition, loadModifiers]);
 
   useEffect(() => {
     void loadSession();
@@ -346,6 +381,9 @@ export default function SettingsView({ orgId, appVersion }: { orgId: string; app
   }, [brandPrimaryColor, brandSecondaryColor, brandingSnapshot.primary, brandingSnapshot.secondary]);
   const previewPrimaryColor = brandPrimaryColor.trim() || '#111827';
   const previewSecondaryColor = brandSecondaryColor.trim() || '#f59e0b';
+  const uploadsEnabled = uploadStatus?.enabled ?? true;
+  const noticeMessage =
+    notice === 'settings-unavailable' ? 'Not available in the Real Estate edition yet.' : null;
 
   const isDirty = useMemo(() => {
     if (!row) return true;
@@ -696,6 +734,10 @@ export default function SettingsView({ orgId, appVersion }: { orgId: string; app
 
   const onLogoSelected = async (file: File | null) => {
     if (!file) return;
+    if (!uploadsEnabled) {
+      setError('Logo uploads are not configured for this environment.');
+      return;
+    }
     const fileType = file.type?.toLowerCase?.() ?? '';
     const isSupported =
       fileType === 'image/png' ||
@@ -760,6 +802,11 @@ export default function SettingsView({ orgId, appVersion }: { orgId: string; app
       {error && (
         <div className="rounded-md border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">{error}</div>
       )}
+      {noticeMessage && (
+        <div className="rounded-md border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-200">
+          {noticeMessage}
+        </div>
+      )}
 
       <input
         ref={logoInputRef}
@@ -797,18 +844,23 @@ export default function SettingsView({ orgId, appVersion }: { orgId: string; app
 
           <div className="sm:ml-auto">
             <div className="flex items-center gap-2">
-              <Button variant="secondary" onClick={triggerLogoPicker} disabled={uploadingLogo || saving}>
+              <Button variant="secondary" onClick={triggerLogoPicker} disabled={uploadingLogo || saving || !uploadsEnabled}>
                 {uploadingLogo ? 'Uploading...' : 'Upload logo'}
               </Button>
             </div>
             <p className="mt-1 text-[11px] text-text-tertiary">JPG/PNG only.</p>
+            {!uploadsEnabled && (
+              <p className="mt-1 text-[11px] text-amber-200">
+                Logo uploads are disabled. Configure Supabase storage to enable uploads.
+              </p>
+            )}
           </div>
         </div>
       </CollapsibleSection>
 
       <CollapsibleSection
-        title="Invoice branding"
-        description="Logo and colors shown on invoices and previews."
+        title="Vendor report branding"
+        description="Logo and colors shown on vendor reports and PDFs."
         storageKey="settings.section.invoice-branding"
         actions={
           <div className="flex items-center gap-2">
@@ -842,17 +894,26 @@ export default function SettingsView({ orgId, appVersion }: { orgId: string; app
                   )}
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-text-primary">Invoice logo</p>
-                  <p className="text-xs text-text-tertiary">Used on invoices and PDFs.</p>
+                  <p className="text-sm font-medium text-text-primary">Vendor report logo</p>
+                  <p className="text-xs text-text-tertiary">Used on vendor reports and PDFs.</p>
                 </div>
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <Button variant="secondary" onClick={triggerLogoPicker} disabled={uploadingLogo || brandingSaving}>
+                  <Button
+                    variant="secondary"
+                    onClick={triggerLogoPicker}
+                    disabled={uploadingLogo || brandingSaving || !uploadsEnabled}
+                  >
                     {uploadingLogo ? 'Uploading...' : 'Upload logo'}
                   </Button>
                 </div>
                 <p className="mt-1 text-[11px] text-text-tertiary">JPG/PNG only.</p>
+                {!uploadsEnabled && (
+                  <p className="mt-1 text-[11px] text-amber-200">
+                    Logo uploads are disabled. Configure Supabase storage to enable uploads.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -911,274 +972,250 @@ export default function SettingsView({ orgId, appVersion }: { orgId: string; app
 
       <OrgUserManagement orgId={orgId} />
 
-      {canLoadDemo && (
-        <CollapsibleSection
-          title="Demo &amp; testing"
-          description="Load demo data for walkthroughs and sales demos."
-          storageKey="settings.section.demo"
-          actions={
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setDemoError(null);
-                setDemoModalOpen(true);
-              }}
-              disabled={demoLoading || sessionLoading}
+      {isTradeEdition && (
+        <>
+          {canLoadDemo && (
+            <CollapsibleSection
+              title="Demo &amp; testing"
+              description="Load demo data for walkthroughs and sales demos."
+              storageKey="settings.section.demo"
+              actions={
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setDemoError(null);
+                    setDemoModalOpen(true);
+                  }}
+                  disabled={demoLoading || sessionLoading}
+                >
+                  Load Demo Dataset
+                </Button>
+              }
             >
-              Load Demo Dataset
-            </Button>
-          }
-        >
-          {demoSuccess && (
-            <div className="rounded-md border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-400">
-              {demoSuccess}
-            </div>
-          )}
-          {demoError && (
-            <div className="rounded-md border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">
-              {demoError}
-            </div>
-          )}
+              {demoSuccess && (
+                <div className="rounded-md border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-400">
+                  {demoSuccess}
+                </div>
+              )}
+              {demoError && (
+                <div className="rounded-md border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">
+                  {demoError}
+                </div>
+              )}
 
-          <div className="mt-4 flex flex-col gap-3">
-            <div className="flex flex-wrap items-center gap-3">
-              <Button
-                variant="secondary"
-                onClick={seedClientDataset}
-                disabled={clientSeedLoading || demoLoading || sessionLoading}
-              >
-                {clientSeedLoading ? 'Seeding...' : 'Seed clients + client jobs'}
-              </Button>
-              <span className="text-xs text-text-tertiary">
-                Creates demo clients with jobs, invoices, and payments to populate client metrics.
-              </span>
-            </div>
-            {clientSeedSuccess && (
-              <div className="rounded-md border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-400">
-                {clientSeedSuccess}
+              <div className="mt-4 flex flex-col gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    variant="secondary"
+                    onClick={seedClientDataset}
+                    disabled={clientSeedLoading || demoLoading || sessionLoading}
+                  >
+                    {clientSeedLoading ? 'Seeding...' : 'Seed clients + client jobs'}
+                  </Button>
+                  <span className="text-xs text-text-tertiary">
+                    Creates demo clients with jobs, invoices, and payments to populate client metrics.
+                  </span>
+                </div>
+                {clientSeedSuccess && (
+                  <div className="rounded-md border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-400">
+                    {clientSeedSuccess}
+                  </div>
+                )}
+                {clientSeedError && (
+                  <div className="rounded-md border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">
+                    {clientSeedError}
+                  </div>
+                )}
               </div>
-            )}
-            {clientSeedError && (
-              <div className="rounded-md border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">
-                {clientSeedError}
-              </div>
-            )}
-          </div>
 
-          <p className="text-sm text-text-secondary">
-            Demo data is clearly marked and never overwrites production records.
-          </p>
-        </CollapsibleSection>
-      )}
-
-      {canViewAudit && (
-        <CollapsibleSection
-          title="Audit logs"
-          description="Trace every change across jobs, schedules, and materials."
-          storageKey="settings.section.audit"
-          actions={
-            <Link href={`/settings/audit-logs?orgId=${orgId}`}>
-              <Button variant="secondary" disabled={sessionLoading}>
-                View audit logs
-              </Button>
-            </Link>
-          }
-        >
-          <p className="text-sm text-text-secondary">
-            Review every change across schedules, materials, and job actions.
-          </p>
-        </CollapsibleSection>
-      )}
-
-      <CollapsibleSection
-        title="Scheduling"
-        description="Defaults used across the app (safe fallbacks apply)."
-        storageKey="settings.section.scheduling"
-      >
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Input
-            label="Default day start"
-            type="time"
-            value={workdayStart}
-            onChange={(e) => setWorkdayStart(e.target.value)}
-            placeholder="06:00"
-          />
-          <Input
-            label="Default day end"
-            type="time"
-            value={workdayEnd}
-            onChange={(e) => setWorkdayEnd(e.target.value)}
-            placeholder="18:00"
-          />
-          <Input
-            label="Default daily capacity (minutes)"
-            inputMode="numeric"
-            value={dailyCapacityMinutes}
-            onChange={(e) => setDailyCapacityMinutes(e.target.value.replace(/[^\d]/g, ''))}
-            placeholder="480"
-          />
-        </div>
-
-        <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium text-text-primary">Travel buffer rules</p>
-            <p className="text-xs text-text-tertiary mt-1">Controls whether travel buffers are shown/enforced.</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Chip active={travelBufferEnabled} onClick={() => setTravelBufferEnabled(true)}>
-              On
-            </Chip>
-            <Chip active={!travelBufferEnabled} onClick={() => setTravelBufferEnabled(false)}>
-              Off
-            </Chip>
-          </div>
-        </div>
-      </CollapsibleSection>
-
-      <CollapsibleSection
-        title="HQ location"
-        description="Used for travel-aware scheduling when crews start or finish at HQ."
-        storageKey="settings.section.hq"
-      >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Input
-            label="Address line 1"
-            value={hqAddressLine1}
-            onChange={(e) => setHqAddressLine1(e.target.value)}
-            placeholder="123 Example St"
-          />
-          <Input
-            label="Address line 2"
-            value={hqAddressLine2}
-            onChange={(e) => setHqAddressLine2(e.target.value)}
-            placeholder="Unit, suite, etc. (optional)"
-          />
-          <Input
-            label="Suburb"
-            value={hqSuburb}
-            onChange={(e) => setHqSuburb(e.target.value)}
-            placeholder="e.g. Fremantle"
-          />
-          <Input
-            label="State"
-            value={hqState}
-            onChange={(e) => setHqState(e.target.value)}
-            placeholder="e.g. WA"
-          />
-          <Input
-            label="Postcode"
-            value={hqPostcode}
-            onChange={(e) => setHqPostcode(e.target.value)}
-            placeholder="e.g. 6160"
-          />
-        </div>
-      </CollapsibleSection>
-
-      <CollapsibleSection
-        title="Profitability guardrails"
-        description="Alert thresholds for margin health and cost variance."
-        storageKey="settings.section.profitability"
-      >
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Input
-            label="Warning margin (%)"
-            inputMode="decimal"
-            value={marginWarning}
-            onChange={(e) => setMarginWarning(e.target.value)}
-            placeholder="30"
-          />
-          <Input
-            label="Critical margin (%)"
-            inputMode="decimal"
-            value={marginCritical}
-            onChange={(e) => setMarginCritical(e.target.value)}
-            placeholder="20"
-          />
-          <Input
-            label="Cost variance trigger (%)"
-            inputMode="decimal"
-            value={varianceThreshold}
-            onChange={(e) => setVarianceThreshold(e.target.value)}
-            placeholder="10"
-          />
-        </div>
-      </CollapsibleSection>
-
-      {showProductivitySeed && (
-        <CollapsibleSection
-          title="Install productivity v2"
-          description="Bucketed person-minute metrics and QA-adjusted output tracking are now always on."
-          storageKey="settings.section.productivity"
-        >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm font-medium text-text-primary">Status</p>
-              <p className="mt-2 text-sm text-text-secondary">Enabled by default</p>
-              <p className="mt-2 text-xs text-text-tertiary">
-                This is the default model going forward.
+              <p className="text-sm text-text-secondary">
+                Demo data is clearly marked and never overwrites production records.
               </p>
-            </div>
-            <Input
-              label="Callback quality window (days)"
-              inputMode="numeric"
-              value={qualityCallbackDays}
-              onChange={(e) => setQualityCallbackDays(e.target.value.replace(/[^\d]/g, ''))}
-              placeholder="30"
-            />
-          </div>
+            </CollapsibleSection>
+          )}
 
-          <div className="mt-4 flex flex-col gap-3">
-            <div className="flex flex-wrap items-center gap-3">
-              <Button
-                variant="secondary"
-                onClick={seedProductivity}
-                disabled={productivitySeedLoading}
-              >
-                {productivitySeedLoading ? 'Seeding...' : 'Seed productivity data'}
-              </Button>
-              <span className="text-xs text-text-tertiary">
-                Generates bucketed time entries and output fields for existing jobs without data.
-              </span>
+          {canViewAudit && (
+            <CollapsibleSection
+              title="Audit logs"
+              description="Trace every change across jobs, schedules, and materials."
+              storageKey="settings.section.audit"
+              actions={
+                <Link href={`/settings/audit-logs?orgId=${orgId}`}>
+                  <Button variant="secondary" disabled={sessionLoading}>
+                    View audit logs
+                  </Button>
+                </Link>
+              }
+            >
+              <p className="text-sm text-text-secondary">
+                Review every change across schedules, materials, and job actions.
+              </p>
+            </CollapsibleSection>
+          )}
+
+          <CollapsibleSection
+            title="Scheduling"
+            description="Defaults used across the app (safe fallbacks apply)."
+            storageKey="settings.section.scheduling"
+          >
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Input
+                label="Default day start"
+                type="time"
+                value={workdayStart}
+                onChange={(e) => setWorkdayStart(e.target.value)}
+                placeholder="06:00"
+              />
+              <Input
+                label="Default day end"
+                type="time"
+                value={workdayEnd}
+                onChange={(e) => setWorkdayEnd(e.target.value)}
+                placeholder="18:00"
+              />
+              <Input
+                label="Default daily capacity (minutes)"
+                inputMode="numeric"
+                value={dailyCapacityMinutes}
+                onChange={(e) => setDailyCapacityMinutes(e.target.value.replace(/[^\d]/g, ''))}
+                placeholder="480"
+              />
             </div>
-            {productivitySeedSuccess && (
-              <div className="rounded-md border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-400">
-                {productivitySeedSuccess}
+
+            <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-text-primary">Travel buffer rules</p>
+                <p className="text-xs text-text-tertiary mt-1">Controls whether travel buffers are shown/enforced.</p>
               </div>
-            )}
-            {productivitySeedError && (
-              <div className="rounded-md border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">
-                {productivitySeedError}
+              <div className="flex items-center gap-2">
+                <Chip active={travelBufferEnabled} onClick={() => setTravelBufferEnabled(true)}>
+                  On
+                </Chip>
+                <Chip active={!travelBufferEnabled} onClick={() => setTravelBufferEnabled(false)}>
+                  Off
+                </Chip>
               </div>
-            )}
-          </div>
-        </CollapsibleSection>
-      )}
-
-      <CollapsibleSection
-        title="Notifications"
-        description="Announcement delivery behaviour."
-        storageKey="settings.section.notifications"
-      >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <p className="text-sm font-medium text-text-primary mb-2">Announcements</p>
-            <div className="flex items-center gap-2">
-              <Chip active={announcementsEnabled} onClick={() => setAnnouncementsEnabled(true)}>
-                Enabled
-              </Chip>
-              <Chip active={!announcementsEnabled} onClick={() => setAnnouncementsEnabled(false)}>
-                Disabled
-              </Chip>
             </div>
-            <p className="text-xs text-text-tertiary mt-2">If disabled, announcements are hidden for this org.</p>
-          </div>
+          </CollapsibleSection>
 
-          <Select label="Urgent behaviour" value={urgentBehavior} onChange={(e) => setUrgentBehavior(e.target.value as any)}>
-            <option value="modal">Blocking modal (requires acknowledgement)</option>
-            <option value="banner">Banner (non-blocking)</option>
-          </Select>
-        </div>
-      </CollapsibleSection>
+          <CollapsibleSection
+            title="HQ location"
+            description="Used for travel-aware scheduling when crews start or finish at HQ."
+            storageKey="settings.section.hq"
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Input
+                label="Address line 1"
+                value={hqAddressLine1}
+                onChange={(e) => setHqAddressLine1(e.target.value)}
+                placeholder="123 Example St"
+              />
+              <Input
+                label="Address line 2"
+                value={hqAddressLine2}
+                onChange={(e) => setHqAddressLine2(e.target.value)}
+                placeholder="Unit, suite, etc. (optional)"
+              />
+              <Input
+                label="Suburb"
+                value={hqSuburb}
+                onChange={(e) => setHqSuburb(e.target.value)}
+                placeholder="e.g. Fremantle"
+              />
+              <Input
+                label="State"
+                value={hqState}
+                onChange={(e) => setHqState(e.target.value)}
+                placeholder="e.g. WA"
+              />
+              <Input
+                label="Postcode"
+                value={hqPostcode}
+                onChange={(e) => setHqPostcode(e.target.value)}
+                placeholder="e.g. 6160"
+              />
+            </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection
+            title="Profitability guardrails"
+            description="Alert thresholds for margin health and cost variance."
+            storageKey="settings.section.profitability"
+          >
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Input
+                label="Warning margin (%)"
+                inputMode="decimal"
+                value={marginWarning}
+                onChange={(e) => setMarginWarning(e.target.value)}
+                placeholder="30"
+              />
+              <Input
+                label="Critical margin (%)"
+                inputMode="decimal"
+                value={marginCritical}
+                onChange={(e) => setMarginCritical(e.target.value)}
+                placeholder="20"
+              />
+              <Input
+                label="Cost variance trigger (%)"
+                inputMode="decimal"
+                value={varianceThreshold}
+                onChange={(e) => setVarianceThreshold(e.target.value)}
+                placeholder="10"
+              />
+            </div>
+          </CollapsibleSection>
+
+          {showProductivitySeed && (
+            <CollapsibleSection
+              title="Install productivity v2"
+              description="Bucketed person-minute metrics and QA-adjusted output tracking are now always on."
+              storageKey="settings.section.productivity"
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm font-medium text-text-primary">Status</p>
+                  <p className="mt-2 text-sm text-text-secondary">Enabled by default</p>
+                  <p className="mt-2 text-xs text-text-tertiary">
+                    This is the default model going forward.
+                  </p>
+                </div>
+                <Input
+                  label="Callback quality window (days)"
+                  inputMode="numeric"
+                  value={qualityCallbackDays}
+                  onChange={(e) => setQualityCallbackDays(e.target.value.replace(/[^\d]/g, ''))}
+                  placeholder="30"
+                />
+              </div>
+
+              <div className="mt-4 flex flex-col gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    variant="secondary"
+                    onClick={seedProductivity}
+                    disabled={productivitySeedLoading}
+                  >
+                    {productivitySeedLoading ? 'Seeding...' : 'Seed productivity data'}
+                  </Button>
+                  <span className="text-xs text-text-tertiary">
+                    Generates bucketed time entries and output fields for existing jobs without data.
+                  </span>
+                </div>
+                {productivitySeedSuccess && (
+                  <div className="rounded-md border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-400">
+                    {productivitySeedSuccess}
+                  </div>
+                )}
+                {productivitySeedError && (
+                  <div className="rounded-md border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">
+                    {productivitySeedError}
+                  </div>
+                )}
+              </div>
+            </CollapsibleSection>
+          )}
 
       <CollapsibleSection
         title="Install time modifiers"
@@ -1272,6 +1309,34 @@ export default function SettingsView({ orgId, appVersion }: { orgId: string; app
             </div>
           </div>
         )}
+      </CollapsibleSection>
+        </>
+      )}
+
+      <CollapsibleSection
+        title="Notifications"
+        description="Announcement delivery behaviour."
+        storageKey="settings.section.notifications"
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <p className="text-sm font-medium text-text-primary mb-2">Announcements</p>
+            <div className="flex items-center gap-2">
+              <Chip active={announcementsEnabled} onClick={() => setAnnouncementsEnabled(true)}>
+                Enabled
+              </Chip>
+              <Chip active={!announcementsEnabled} onClick={() => setAnnouncementsEnabled(false)}>
+                Disabled
+              </Chip>
+            </div>
+            <p className="text-xs text-text-tertiary mt-2">If disabled, announcements are hidden for this org.</p>
+          </div>
+
+          <Select label="Urgent behaviour" value={urgentBehavior} onChange={(e) => setUrgentBehavior(e.target.value as any)}>
+            <option value="modal">Blocking modal (requires acknowledgement)</option>
+            <option value="banner">Banner (non-blocking)</option>
+          </Select>
+        </div>
       </CollapsibleSection>
 
       {demoModalOpen && (

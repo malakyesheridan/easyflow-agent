@@ -11,6 +11,7 @@ import { orgMemberships } from '@/db/schema/org_memberships';
 import { orgInvites } from '@/db/schema/org_invites';
 import { orgRoles } from '@/db/schema/org_roles';
 import { crewMembers } from '@/db/schema/crew_members';
+import { isRealEstateEdition } from '@/lib/appEdition';
 import { users } from '@/db/schema/users';
 import { userSessions } from '@/db/schema/user_sessions';
 
@@ -49,37 +50,59 @@ export const GET = withRoute(async (req: Request) => {
     return err('FORBIDDEN', 'Insufficient permissions');
   }
 
+  const isRealEstate = isRealEstateEdition();
   const db = getDb();
 
   const rolesResult = await listOrgRoles({ orgId: context.data.orgId });
   if (!rolesResult.ok) return rolesResult;
 
-  const membershipRows = await db
-    .select({
-      membershipId: orgMemberships.id,
-      userId: orgMemberships.userId,
-      email: users.email,
-      name: users.name,
-      userStatus: users.status,
-      userCreatedAt: users.createdAt,
-      lastLoginAt: users.lastLoginAt,
-      roleId: orgMemberships.roleId,
-      roleKey: orgRoles.key,
-      roleName: orgRoles.name,
-      membershipStatus: orgMemberships.status,
-      membershipCreatedAt: orgMemberships.createdAt,
-      crewMemberId: orgMemberships.crewMemberId,
-      crewDisplayName: crewMembers.displayName,
-      crewRole: crewMembers.role,
-      crewActive: crewMembers.active,
-      crewEmail: crewMembers.email,
-    })
-    .from(orgMemberships)
-    .innerJoin(users, eq(orgMemberships.userId, users.id))
-    .leftJoin(orgRoles, eq(orgMemberships.roleId, orgRoles.id))
-    .leftJoin(crewMembers, eq(orgMemberships.crewMemberId, crewMembers.id))
-    .where(eq(orgMemberships.orgId, context.data.orgId))
-    .orderBy(desc(orgMemberships.createdAt));
+  const membershipRows = isRealEstate
+    ? await db
+        .select({
+          membershipId: orgMemberships.id,
+          userId: orgMemberships.userId,
+          email: users.email,
+          name: users.name,
+          userStatus: users.status,
+          userCreatedAt: users.createdAt,
+          lastLoginAt: users.lastLoginAt,
+          roleId: orgMemberships.roleId,
+          roleKey: orgRoles.key,
+          roleName: orgRoles.name,
+          membershipStatus: orgMemberships.status,
+          membershipCreatedAt: orgMemberships.createdAt,
+        })
+        .from(orgMemberships)
+        .innerJoin(users, eq(orgMemberships.userId, users.id))
+        .leftJoin(orgRoles, eq(orgMemberships.roleId, orgRoles.id))
+        .where(eq(orgMemberships.orgId, context.data.orgId))
+        .orderBy(desc(orgMemberships.createdAt))
+    : await db
+        .select({
+          membershipId: orgMemberships.id,
+          userId: orgMemberships.userId,
+          email: users.email,
+          name: users.name,
+          userStatus: users.status,
+          userCreatedAt: users.createdAt,
+          lastLoginAt: users.lastLoginAt,
+          roleId: orgMemberships.roleId,
+          roleKey: orgRoles.key,
+          roleName: orgRoles.name,
+          membershipStatus: orgMemberships.status,
+          membershipCreatedAt: orgMemberships.createdAt,
+          crewMemberId: orgMemberships.crewMemberId,
+          crewDisplayName: crewMembers.displayName,
+          crewRole: crewMembers.role,
+          crewActive: crewMembers.active,
+          crewEmail: crewMembers.email,
+        })
+        .from(orgMemberships)
+        .innerJoin(users, eq(orgMemberships.userId, users.id))
+        .leftJoin(orgRoles, eq(orgMemberships.roleId, orgRoles.id))
+        .leftJoin(crewMembers, eq(orgMemberships.crewMemberId, crewMembers.id))
+        .where(eq(orgMemberships.orgId, context.data.orgId))
+        .orderBy(desc(orgMemberships.createdAt));
 
   const userIds = Array.from(new Set(membershipRows.map((row) => row.userId)));
   const start30 = new Date();
@@ -112,7 +135,7 @@ export const GET = withRoute(async (req: Request) => {
     })
   );
 
-  const members = membershipRows.map((row) => {
+  const members = membershipRows.map((row: any) => {
     const session = sessionByUserId.get(String(row.userId)) ?? {
       totalSessions: 0,
       sessions30d: 0,
@@ -142,26 +165,42 @@ export const GET = withRoute(async (req: Request) => {
     };
   });
 
-  const inviteRows = await db
-    .select({
-      id: orgInvites.id,
-      email: orgInvites.email,
-      roleId: orgInvites.roleId,
-      roleKey: orgRoles.key,
-      roleName: orgRoles.name,
-      crewMemberId: orgInvites.crewMemberId,
-      crewDisplayName: crewMembers.displayName,
-      status: orgInvites.status,
-      createdAt: orgInvites.createdAt,
-      expiresAt: orgInvites.expiresAt,
-    })
-    .from(orgInvites)
-    .leftJoin(orgRoles, eq(orgInvites.roleId, orgRoles.id))
-    .leftJoin(crewMembers, eq(orgInvites.crewMemberId, crewMembers.id))
-    .where(eq(orgInvites.orgId, context.data.orgId))
-    .orderBy(desc(orgInvites.createdAt));
+  const inviteRows = isRealEstate
+    ? await db
+        .select({
+          id: orgInvites.id,
+          email: orgInvites.email,
+          roleId: orgInvites.roleId,
+          roleKey: orgRoles.key,
+          roleName: orgRoles.name,
+          status: orgInvites.status,
+          createdAt: orgInvites.createdAt,
+          expiresAt: orgInvites.expiresAt,
+        })
+        .from(orgInvites)
+        .leftJoin(orgRoles, eq(orgInvites.roleId, orgRoles.id))
+        .where(eq(orgInvites.orgId, context.data.orgId))
+        .orderBy(desc(orgInvites.createdAt))
+    : await db
+        .select({
+          id: orgInvites.id,
+          email: orgInvites.email,
+          roleId: orgInvites.roleId,
+          roleKey: orgRoles.key,
+          roleName: orgRoles.name,
+          crewMemberId: orgInvites.crewMemberId,
+          crewDisplayName: crewMembers.displayName,
+          status: orgInvites.status,
+          createdAt: orgInvites.createdAt,
+          expiresAt: orgInvites.expiresAt,
+        })
+        .from(orgInvites)
+        .leftJoin(orgRoles, eq(orgInvites.roleId, orgRoles.id))
+        .leftJoin(crewMembers, eq(orgInvites.crewMemberId, crewMembers.id))
+        .where(eq(orgInvites.orgId, context.data.orgId))
+        .orderBy(desc(orgInvites.createdAt));
 
-  const invites = inviteRows.map((row) => ({
+  const invites = inviteRows.map((row: any) => ({
     id: String(row.id),
     email: String(row.email ?? ''),
     roleId: row.roleId ? String(row.roleId) : null,
@@ -174,26 +213,26 @@ export const GET = withRoute(async (req: Request) => {
     expiresAt: row.expiresAt,
   }));
 
-  const crewRows = await db
-    .select({
-      id: crewMembers.id,
-      displayName: crewMembers.displayName,
-      role: crewMembers.role,
-      email: crewMembers.email,
-      active: crewMembers.active,
-    })
-    .from(crewMembers)
-    .leftJoin(orgMemberships, eq(crewMembers.id, orgMemberships.crewMemberId))
-    .where(and(eq(crewMembers.orgId, context.data.orgId), isNull(orgMemberships.id)))
-    .orderBy(asc(crewMembers.displayName));
-
-  const crewWithoutAccounts = crewRows.map((row) => ({
-    id: String(row.id),
-    displayName: String(row.displayName ?? ''),
-    role: String(row.role ?? ''),
-    email: row.email ?? null,
-    active: typeof row.active === 'boolean' ? row.active : false,
-  }));
+  const crewWithoutAccounts = isRealEstate
+    ? []
+    : (await db
+        .select({
+          id: crewMembers.id,
+          displayName: crewMembers.displayName,
+          role: crewMembers.role,
+          email: crewMembers.email,
+          active: crewMembers.active,
+        })
+        .from(crewMembers)
+        .leftJoin(orgMemberships, eq(crewMembers.id, orgMemberships.crewMemberId))
+        .where(and(eq(crewMembers.orgId, context.data.orgId), isNull(orgMemberships.id)))
+        .orderBy(asc(crewMembers.displayName))).map((row) => ({
+          id: String(row.id),
+          displayName: String(row.displayName ?? ''),
+          role: String(row.role ?? ''),
+          email: row.email ?? null,
+          active: typeof row.active === 'boolean' ? row.active : false,
+        }));
 
   const roles = rolesResult.data.map((role) => ({
     id: String(role.id),
@@ -217,6 +256,7 @@ export const POST = withRoute(async (req: Request) => {
     return err('VALIDATION_ERROR', parsed.error.errors[0]?.message || 'Invalid payload');
   }
 
+  const isRealEstate = isRealEstateEdition();
   const { orgId, inviteId, email, roleId, roleKey, crewMemberId } = parsed.data;
   const context = await requireOrgContext(req, orgId);
   if (!context.ok) return context;
@@ -227,7 +267,7 @@ export const POST = withRoute(async (req: Request) => {
   const db = getDb();
   let resolvedEmail = email ? normalizeEmail(email) : '';
   let resolvedRoleId: string | null = roleId ?? null;
-  let resolvedCrewMemberId: string | null = crewMemberId ?? null;
+  let resolvedCrewMemberId: string | null = isRealEstate ? null : crewMemberId ?? null;
 
   let inviteRow:
     | {
@@ -262,10 +302,10 @@ export const POST = withRoute(async (req: Request) => {
     };
     resolvedEmail = normalizeEmail(inviteRow.email);
     resolvedRoleId = inviteRow.roleId;
-    resolvedCrewMemberId = inviteRow.crewMemberId;
+    resolvedCrewMemberId = isRealEstate ? null : inviteRow.crewMemberId;
   }
 
-  if (resolvedCrewMemberId) {
+  if (resolvedCrewMemberId && !isRealEstate) {
     const [crewRow] = await db
       .select({ id: crewMembers.id, email: crewMembers.email })
       .from(crewMembers)

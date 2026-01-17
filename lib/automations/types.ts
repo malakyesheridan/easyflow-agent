@@ -221,7 +221,16 @@ export type AutomationTemplate = {
   key: string;
   name: string;
   description: string;
-  category: 'communications' | 'operations' | 'materials' | 'progress' | 'safety';
+  category:
+    | 'communications'
+    | 'operations'
+    | 'materials'
+    | 'progress'
+    | 'safety'
+    | 'contacts'
+    | 'appraisals'
+    | 'listings'
+    | 'reports';
   triggerType: AutomationTriggerType;
   triggerFilters?: AutomationTriggerFilters;
   conditions?: ConditionNode[];

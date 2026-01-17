@@ -5,6 +5,10 @@ import { scheduleAssignments } from '@/db/schema/schedule_assignments';
 import { materials } from '@/db/schema/materials';
 import { jobContacts } from '@/db/schema/job_contacts';
 import { crewMembers } from '@/db/schema/crew_members';
+import { contacts } from '@/db/schema/contacts';
+import { listings } from '@/db/schema/listings';
+import { appraisals } from '@/db/schema/appraisals';
+import { listingReports } from '@/db/schema/listing_reports';
 import { orgSettings } from '@/db/schema/org_settings';
 import { orgMemberships } from '@/db/schema/org_memberships';
 import { orgRoles } from '@/db/schema/org_roles';
@@ -34,6 +38,10 @@ export type AutomationContext = {
     payload: Record<string, unknown>;
     actorUserId: string | null;
   };
+  contact: Record<string, unknown> | null;
+  listing: Record<string, unknown> | null;
+  appraisal: Record<string, unknown> | null;
+  report: Record<string, unknown> | null;
   job: Record<string, unknown> | null;
   assignment: Record<string, unknown> | null;
   material: Record<string, unknown> | null;
@@ -75,6 +83,11 @@ export async function resolveAutomationContext(params: {
   const materialId = getString(payload.materialId);
   const crewId = getString(payload.crewId);
   const dateStr = getString(payload.date);
+  const contactId = getString(payload.contactId);
+  const appraisalId = getString(payload.appraisalId);
+  const listingId = getString(payload.listingId);
+  const reportId = getString(payload.reportId) ?? getString(payload.listingReportId);
+  const reportToken = getString(payload.reportToken) ?? getString(payload.shareToken);
 
   const [settingsRow] = await params.db
     .select()
@@ -106,6 +119,62 @@ export async function resolveAutomationContext(params: {
         .limit(1)
     : [null];
 
+  const [reportRow] = reportId
+    ? await params.db
+        .select()
+        .from(listingReports)
+        .where(and(eq(listingReports.orgId, params.orgId), eq(listingReports.id, reportId)))
+        .limit(1)
+    : reportToken
+      ? await params.db
+          .select()
+          .from(listingReports)
+          .where(and(eq(listingReports.orgId, params.orgId), eq(listingReports.shareToken, reportToken)))
+          .limit(1)
+      : [null];
+
+  const resolvedListingId =
+    listingId ??
+    (reportRow?.listingId ? String(reportRow.listingId) : null);
+
+  const [listingRow] = resolvedListingId
+    ? await params.db
+        .select()
+        .from(listings)
+        .where(and(eq(listings.orgId, params.orgId), eq(listings.id, resolvedListingId)))
+        .limit(1)
+    : [null];
+
+  const [appraisalRow] = appraisalId
+    ? await params.db
+        .select()
+        .from(appraisals)
+        .where(and(eq(appraisals.orgId, params.orgId), eq(appraisals.id, appraisalId)))
+        .limit(1)
+    : [null];
+
+  let contactRow: any = null;
+  if (contactId) {
+    [contactRow] = await params.db
+      .select()
+      .from(contacts)
+      .where(and(eq(contacts.orgId, params.orgId), eq(contacts.id, contactId)))
+      .limit(1);
+  }
+
+  if (!contactRow) {
+    const fallbackContactId =
+      (listingRow?.vendorContactId ? String(listingRow.vendorContactId) : null) ??
+      (appraisalRow?.contactId ? String(appraisalRow.contactId) : null);
+    if (fallbackContactId) {
+      [contactRow] = await params.db
+        .select()
+        .from(contacts)
+        .where(and(eq(contacts.orgId, params.orgId), eq(contacts.id, fallbackContactId)))
+        .limit(1);
+    }
+  }
+
   const contactRows = jobId
     ? await params.db
         .select()
@@ -121,6 +190,7 @@ export async function resolveAutomationContext(params: {
     const role = String(contact.role ?? '').toLowerCase();
     return role.includes('site');
   });
+  const resolvedClientContact = clientContact ?? contactRow ?? null;
 
   const crewIds = new Set<string>();
   if (crewId) crewIds.add(crewId);
@@ -251,6 +321,7 @@ export async function resolveAutomationContext(params: {
   }
 
   const entity = assignmentRow ?? jobRow ?? materialRow ?? null;
+  const resolvedEntity = reportRow ?? appraisalRow ?? listingRow ?? contactRow ?? entity;
 
   return {
     event: {
@@ -260,12 +331,16 @@ export async function resolveAutomationContext(params: {
       payload,
       actorUserId: params.event.actorUserId ?? null,
     },
+    contact: contactRow ? { ...contactRow } : null,
+    listing: listingRow ? { ...listingRow } : null,
+    appraisal: appraisalRow ? { ...appraisalRow } : null,
+    report: reportRow ? { ...reportRow } : null,
     job: jobRow ? { ...jobRow } : null,
     assignment: assignmentRow ? { ...assignmentRow } : null,
     material: materialRow ? { ...materialRow } : null,
-    entity: entity ? { ...entity } : null,
+    entity: resolvedEntity ? { ...resolvedEntity } : null,
     contacts: {
-      client: clientContact ? { ...clientContact } : null,
+      client: resolvedClientContact ? { ...resolvedClientContact } : null,
       siteContacts: siteContacts.map((contact) => ({ ...contact })),
     },
     crew: crewRows.map((row) => ({ ...row })),

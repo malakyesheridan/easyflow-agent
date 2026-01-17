@@ -40,8 +40,6 @@ export default function SidebarNav() {
       label: 'Settings',
       subItems: [
         { href: '/settings', label: 'General' },
-        { href: '/settings/integrations', label: 'Integrations' },
-        { href: '/settings/communications', label: 'Communications' },
         { href: '/settings/automations', label: 'Automations' },
       ],
     },

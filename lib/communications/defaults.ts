@@ -1,4 +1,5 @@
 import type { RecipientRules, TimingRules } from '@/lib/communications/types';
+import { getAppEdition } from '@/lib/appEdition';
 
 export type DefaultTemplateSeed = {
   key: string;
@@ -29,7 +30,7 @@ export type DefaultPreferenceSeed = {
   timing?: TimingRules;
 };
 
-export const DEFAULT_TEMPLATES: DefaultTemplateSeed[] = [
+export const TRADE_DEFAULT_TEMPLATES: DefaultTemplateSeed[] = [
   {
     key: 'job_assigned',
     channel: 'email',
@@ -436,7 +437,201 @@ export const DEFAULT_TEMPLATES: DefaultTemplateSeed[] = [
   },
 ];
 
-export const DEFAULT_PREFERENCES: DefaultPreferenceSeed[] = [
+export const REAL_ESTATE_DEFAULT_TEMPLATES: DefaultTemplateSeed[] = [
+  {
+    key: 'vendor_report_ready',
+    channel: 'email',
+    name: 'Vendor report ready (email)',
+    subject: 'Vendor report ready for {{listing.addressLine1}}',
+    body:
+      'Hi {{recipient.name}},\n\n' +
+      'Your vendor report is ready to share.\n\n' +
+      'Listing: {{listing.addressLine1}}, {{listing.suburb}}\n' +
+      'Campaign health: {{listing.campaignHealthScore}}\n\n' +
+      'Open report: {{links.appEntityUrl}}\n',
+  },
+  {
+    key: 'vendor_report_ready',
+    channel: 'in_app',
+    name: 'Vendor report ready (in-app)',
+    body: 'Vendor report ready for {{listing.addressLine1}}.',
+  },
+  {
+    key: 'vendor_update_reminder',
+    channel: 'email',
+    name: 'Vendor update reminder (email)',
+    subject: 'Vendor update due for {{listing.addressLine1}}',
+    body:
+      'Hi {{recipient.name}},\n\n' +
+      'A vendor update is due.\n\n' +
+      'Listing: {{listing.addressLine1}}, {{listing.suburb}}\n' +
+      'Last update: {{listing.reportLastSentAt}}\n\n' +
+      'Open listing: {{links.appEntityUrl}}\n',
+  },
+  {
+    key: 'vendor_update_reminder',
+    channel: 'in_app',
+    name: 'Vendor update reminder (in-app)',
+    body: 'Vendor update due for {{listing.addressLine1}}.',
+  },
+  {
+    key: 'appraisal_confirmation',
+    channel: 'email',
+    name: 'Appraisal confirmation (email)',
+    subject: 'Appraisal confirmed: {{appraisal.appointmentAt}}',
+    body:
+      'Hi {{recipient.name}},\n\n' +
+      'Appraisal appointment confirmed.\n\n' +
+      'Contact: {{contact.fullName}}\n' +
+      'When: {{appraisal.appointmentAt}}\n' +
+      'Address: {{appraisal.address}}\n\n' +
+      'Open appraisal: {{links.appEntityUrl}}\n',
+  },
+  {
+    key: 'appraisal_confirmation',
+    channel: 'in_app',
+    name: 'Appraisal confirmation (in-app)',
+    body: 'Appraisal confirmed for {{contact.fullName}}.',
+  },
+  {
+    key: 'appraisal_followup',
+    channel: 'email',
+    name: 'Appraisal follow-up (email)',
+    subject: 'Appraisal follow-up due for {{contact.fullName}}',
+    body:
+      'Hi {{recipient.name}},\n\n' +
+      'An appraisal follow-up is due.\n\n' +
+      'Contact: {{contact.fullName}}\n' +
+      'Stage: {{appraisal.stage}}\n\n' +
+      'Open appraisal: {{links.appEntityUrl}}\n',
+  },
+  {
+    key: 'appraisal_followup',
+    channel: 'in_app',
+    name: 'Appraisal follow-up (in-app)',
+    body: 'Appraisal follow-up due for {{contact.fullName}}.',
+  },
+  {
+    key: 'hot_seller_nurture',
+    channel: 'email',
+    name: 'Hot seller nurture (email)',
+    subject: 'Hot seller intent: {{contact.fullName}}',
+    body:
+      'Hi {{recipient.name}},\n\n' +
+      'A contact has crossed into hot seller intent.\n\n' +
+      'Contact: {{contact.fullName}}\n' +
+      'Next touch: {{contact.nextTouchAt}}\n\n' +
+      'Open contact: {{links.appEntityUrl}}\n',
+  },
+  {
+    key: 'hot_seller_nurture',
+    channel: 'in_app',
+    name: 'Hot seller nurture (in-app)',
+    body: 'Hot seller intent: {{contact.fullName}}.',
+  },
+  {
+    key: 'general_contact_nurture',
+    channel: 'email',
+    name: 'General contact nurture (email)',
+    subject: 'Contact nurture reminder',
+    body:
+      'Hi {{recipient.name}},\n\n' +
+      'A contact follow-up is due.\n\n' +
+      'Contact: {{contact.fullName}}\n' +
+      'Next touch: {{contact.nextTouchAt}}\n\n' +
+      'Open contact: {{links.appEntityUrl}}\n',
+  },
+  {
+    key: 'general_contact_nurture',
+    channel: 'in_app',
+    name: 'General contact nurture (in-app)',
+    body: 'Contact follow-up due for {{contact.fullName}}.',
+  },
+  {
+    key: 'announcement_published',
+    channel: 'in_app',
+    name: 'Announcement published (in-app)',
+    body: 'Announcement: {{announcement.title}}',
+  },
+  {
+    key: 'system_test_email',
+    channel: 'email',
+    name: 'System test (email)',
+    subject: 'Test email from {{org.name}}',
+    body:
+      'Hi {{recipient.name}},\n\n' +
+      'This is a test email from {{org.name}}.\n\n' +
+      'If you received this message, your email settings are working.\n',
+  },
+  {
+    key: 'automation.customer_notify_generic',
+    channel: 'email',
+    name: 'Automation customer notify (email)',
+    subject: 'Update from {{org.name}}',
+    body:
+      'Hi {{recipient.name}},\n\n' +
+      'We have an update from {{org.name}}.\n\n' +
+      'View details: {{links.appEntityUrl}}\n',
+  },
+  {
+    key: 'automation.customer_notify_generic',
+    channel: 'sms',
+    name: 'Automation customer notify (sms)',
+    body: 'Update from {{org.name}}. {{links.appEntityUrl}}',
+  },
+  {
+    key: 'automation.customer_notify_generic',
+    channel: 'in_app',
+    name: 'Automation customer notify (in-app)',
+    body: 'Update from {{org.name}}.',
+  },
+  {
+    key: 'automation.admin_notify_generic',
+    channel: 'email',
+    name: 'Automation admin notify (email)',
+    subject: 'Automation alert: {{automation.ruleName}}',
+    body:
+      'Hi {{recipient.name}},\n\n' +
+      'Automation "{{automation.ruleName}}" ran for {{automation.triggerKey}}.\n\n' +
+      'View details: {{links.appEntityUrl}}\n',
+  },
+  {
+    key: 'automation.admin_notify_generic',
+    channel: 'sms',
+    name: 'Automation admin notify (sms)',
+    body: 'Automation "{{automation.ruleName}}" ran. {{links.appEntityUrl}}',
+  },
+  {
+    key: 'automation.admin_notify_generic',
+    channel: 'in_app',
+    name: 'Automation admin notify (in-app)',
+    body: 'Automation "{{automation.ruleName}}" ran.',
+  },
+  {
+    key: 'automation.crew_notify_generic',
+    channel: 'email',
+    name: 'Automation staff notify (email)',
+    subject: 'Update from {{org.name}}',
+    body:
+      'Hi {{recipient.name}},\n\n' +
+      'There is an update related to your pipeline.\n\n' +
+      'View details: {{links.appEntityUrl}}\n',
+  },
+  {
+    key: 'automation.crew_notify_generic',
+    channel: 'sms',
+    name: 'Automation staff notify (sms)',
+    body: 'Update from {{org.name}}. {{links.appEntityUrl}}',
+  },
+  {
+    key: 'automation.crew_notify_generic',
+    channel: 'in_app',
+    name: 'Automation staff notify (in-app)',
+    body: 'Update from {{org.name}}.',
+  },
+];
+
+export const TRADE_DEFAULT_PREFERENCES: DefaultPreferenceSeed[] = [
   {
     eventKey: 'job_assigned',
     enabledEmail: true,
@@ -599,3 +794,93 @@ export const DEFAULT_PREFERENCES: DefaultPreferenceSeed[] = [
     recipientRules: {},
   },
 ];
+
+export const REAL_ESTATE_DEFAULT_PREFERENCES: DefaultPreferenceSeed[] = [
+  {
+    eventKey: 'vendor_report_ready',
+    enabledEmail: true,
+    enabledSms: false,
+    enabledInApp: true,
+    recipientRules: { to_roles: ['admin', 'manager', 'staff'] },
+  },
+  {
+    eventKey: 'vendor_update_reminder',
+    enabledEmail: true,
+    enabledSms: false,
+    enabledInApp: true,
+    recipientRules: { to_roles: ['admin', 'manager', 'staff'] },
+  },
+  {
+    eventKey: 'appraisal_confirmation',
+    enabledEmail: true,
+    enabledSms: false,
+    enabledInApp: true,
+    recipientRules: { to_roles: ['admin', 'manager', 'staff'] },
+  },
+  {
+    eventKey: 'appraisal_followup',
+    enabledEmail: true,
+    enabledSms: false,
+    enabledInApp: true,
+    recipientRules: { to_roles: ['admin', 'manager', 'staff'] },
+  },
+  {
+    eventKey: 'hot_seller_nurture',
+    enabledEmail: true,
+    enabledSms: false,
+    enabledInApp: true,
+    recipientRules: { to_roles: ['admin', 'manager', 'staff'] },
+  },
+  {
+    eventKey: 'general_contact_nurture',
+    enabledEmail: true,
+    enabledSms: false,
+    enabledInApp: true,
+    recipientRules: { to_roles: ['admin', 'manager', 'staff'] },
+  },
+  {
+    eventKey: 'announcement_published',
+    enabledEmail: false,
+    enabledSms: false,
+    enabledInApp: true,
+    recipientRules: { to_all_staff: true },
+  },
+  {
+    eventKey: 'system_test_email',
+    enabledEmail: true,
+    enabledSms: false,
+    enabledInApp: false,
+    recipientRules: {},
+  },
+  {
+    eventKey: 'automation.customer_notify_generic',
+    enabledEmail: true,
+    enabledSms: true,
+    enabledInApp: true,
+    recipientRules: {},
+  },
+  {
+    eventKey: 'automation.admin_notify_generic',
+    enabledEmail: true,
+    enabledSms: true,
+    enabledInApp: true,
+    recipientRules: {},
+  },
+  {
+    eventKey: 'automation.crew_notify_generic',
+    enabledEmail: true,
+    enabledSms: true,
+    enabledInApp: true,
+    recipientRules: {},
+  },
+];
+
+function getCommDefaults() {
+  const edition = getAppEdition();
+  return edition === 'trades'
+    ? { templates: TRADE_DEFAULT_TEMPLATES, preferences: TRADE_DEFAULT_PREFERENCES }
+    : { templates: REAL_ESTATE_DEFAULT_TEMPLATES, preferences: REAL_ESTATE_DEFAULT_PREFERENCES };
+}
+
+export const DEFAULT_TEMPLATES = getCommDefaults().templates;
+export const DEFAULT_PREFERENCES = getCommDefaults().preferences;
