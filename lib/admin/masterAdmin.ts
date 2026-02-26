@@ -242,6 +242,13 @@ function normalizeEmail(email?: string | null): string {
   return (email ?? '').trim().toLowerCase();
 }
 
+function isSkippableSchemaError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const code = 'code' in error ? String((error as { code?: unknown }).code ?? '') : '';
+  // 42P01: undefined_table, 42703: undefined_column
+  return code === '42P01' || code === '42703';
+}
+
 async function queryModuleUserCounts(): Promise<ModuleUserCount[]> {
   const db = getDb();
   const batches = await Promise.all(
@@ -257,24 +264,29 @@ async function queryModuleUserCounts(): Promise<ModuleUserCount[]> {
         where ${userColumn} is not null
         group by org_id, ${userColumn}
       `;
-      const result = await db.execute(sql.raw(query));
-      const rows = asRows(result);
-      return rows
-        .map((row): ModuleUserCount | null => {
-          const orgId = asString(row.orgId);
-          const userId = asString(row.userId);
-          if (!orgId || !userId) return null;
-          return {
-            moduleKey: def.key,
-            pageKey: def.pageKey,
-            table: def.table,
-            linkageLabel: def.linkageLabel,
-            orgId,
-            userId,
-            total: asNumber(row.total),
-          };
-        })
-        .filter((row): row is ModuleUserCount => Boolean(row));
+      try {
+        const result = await db.execute(sql.raw(query));
+        const rows = asRows(result);
+        return rows
+          .map((row): ModuleUserCount | null => {
+            const orgId = asString(row.orgId);
+            const userId = asString(row.userId);
+            if (!orgId || !userId) return null;
+            return {
+              moduleKey: def.key,
+              pageKey: def.pageKey,
+              table: def.table,
+              linkageLabel: def.linkageLabel,
+              orgId,
+              userId,
+              total: asNumber(row.total),
+            };
+          })
+          .filter((row): row is ModuleUserCount => Boolean(row));
+      } catch (error) {
+        if (isSkippableSchemaError(error)) return [];
+        throw error;
+      }
     })
   );
   return batches.flat();
@@ -292,19 +304,24 @@ async function queryOrgPageTotals(): Promise<OrgPageTotal[]> {
         from public.${table}
         group by org_id
       `;
-      const result = await db.execute(sql.raw(query));
-      const rows = asRows(result);
-      return rows
-        .map((row): OrgPageTotal | null => {
-          const orgId = asString(row.orgId);
-          if (!orgId) return null;
-          return {
-            pageKey: def.pageKey,
-            orgId,
-            total: asNumber(row.total),
-          };
-        })
-        .filter((row): row is OrgPageTotal => Boolean(row));
+      try {
+        const result = await db.execute(sql.raw(query));
+        const rows = asRows(result);
+        return rows
+          .map((row): OrgPageTotal | null => {
+            const orgId = asString(row.orgId);
+            if (!orgId) return null;
+            return {
+              pageKey: def.pageKey,
+              orgId,
+              total: asNumber(row.total),
+            };
+          })
+          .filter((row): row is OrgPageTotal => Boolean(row));
+      } catch (error) {
+        if (isSkippableSchemaError(error)) return [];
+        throw error;
+      }
     })
   );
   return batches.flat();
