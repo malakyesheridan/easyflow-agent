@@ -1,9 +1,14 @@
 import { err, ok } from '@/lib/result';
 import { jsonResult } from '@/lib/api-response';
 import { buildSessionCookie, getSessionContext, getSessionTokenFromRequest, refreshSession } from '@/lib/auth/session';
+import { getAuthHardBlockMessage, isAuthHardBlocked } from '@/lib/auth/hardBlock';
 
 export async function GET(req: Request): Promise<Response> {
   try {
+    if (isAuthHardBlocked()) {
+      return jsonResult(err('FORBIDDEN', getAuthHardBlockMessage()));
+    }
+
     const session = await getSessionContext(req);
     if (!session) return jsonResult(err('UNAUTHORIZED', 'Sign in required'));
 

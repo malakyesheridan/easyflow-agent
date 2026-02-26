@@ -8,6 +8,7 @@ import { orgMemberships } from '@/db/schema/org_memberships';
 import { orgRoles } from '@/db/schema/org_roles';
 import { ok, err, type Result } from '@/lib/result';
 import { SESSION_COOKIE_NAME, SESSION_MAX_AGE_SECONDS } from './sessionConstants';
+import { getAuthHardBlockMessage, isAuthHardBlocked } from './hardBlock';
 
 const SESSION_TOKEN_BYTES = 32;
 
@@ -117,6 +118,8 @@ export async function refreshSession(sessionId: string): Promise<void> {
 }
 
 export async function getSessionContext(req: Request): Promise<SessionContext | null> {
+  if (isAuthHardBlocked()) return null;
+
   const token = getSessionTokenFromRequest(req);
   if (!token) return null;
 
@@ -204,6 +207,8 @@ export async function getSessionContext(req: Request): Promise<SessionContext | 
 }
 
 export async function requireSession(req: Request): Promise<Result<SessionContext>> {
+  if (isAuthHardBlocked()) return err('FORBIDDEN', getAuthHardBlockMessage());
+
   const session = await getSessionContext(req);
   if (!session) return err('UNAUTHORIZED', 'Sign in required');
   return ok(session);
