@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { SESSION_COOKIE_NAME } from '@/lib/auth/sessionConstants';
+import { isAuthHardBlocked } from '@/lib/auth/hardBlock';
 
 const AUTH_FREE_PATHS = [
   '/login',
@@ -14,6 +15,7 @@ const AUTH_FREE_PATHS = [
   '/auth',
 ];
 const DISABLED_TRADE_PATHS = ['/jobs', '/crews', '/crew', '/warehouse', '/invoices', '/operations', '/clients'];
+const AUTH_HARD_BLOCK_ALLOWED_PATHS = ['/login', '/forgot-password', '/reset-password', '/logout'];
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -25,6 +27,13 @@ export function middleware(req: NextRequest) {
     pathname.endsWith('.ico')
   ) {
     return NextResponse.next();
+  }
+
+  if (isAuthHardBlocked() && !AUTH_HARD_BLOCK_ALLOWED_PATHS.some((path) => pathname.startsWith(path))) {
+    const url = req.nextUrl.clone();
+    url.pathname = '/login';
+    url.searchParams.set('blocked', '1');
+    return NextResponse.redirect(url);
   }
 
   if (AUTH_FREE_PATHS.some((path) => pathname.startsWith(path))) {
