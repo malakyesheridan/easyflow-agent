@@ -45,6 +45,15 @@ type OrgPageTotal = {
   total: number;
 };
 
+type ModuleAggregate = {
+  key: string;
+  pageKey: string;
+  table: string;
+  linkageLabel: string;
+  total: number;
+  byOrg: Map<string, number>;
+};
+
 export type MasterAdminInsightData = {
   generatedAt: Date;
   summary: {
@@ -516,17 +525,7 @@ export async function getMasterAdminInsights(): Promise<MasterAdminInsightData> 
 
   const moduleByUser = new Map<
     string,
-    Map<
-      string,
-      {
-        key: string;
-        pageKey: string;
-        table: string;
-        linkageLabel: string;
-        total: number;
-        byOrg: Map<string, number>;
-      }
-    >
+    Map<string, ModuleAggregate>
   >();
   const userOwnedByOrgPage = new Map<string, Map<string, Map<string, number>>>();
 
@@ -593,19 +592,19 @@ export async function getMasterAdminInsights(): Promise<MasterAdminInsightData> 
       user.activity.lastAuditEventAt = (audit.latestCreatedAt as Date | null) ?? null;
     }
 
-    const actionMap = actionByUser.get(user.id) ?? new Map();
+    const actionMap = actionByUser.get(user.id) ?? new Map<string, number>();
     user.activity.topActions = Array.from(actionMap.entries())
       .map(([action, total]) => ({ action, total }))
       .sort((a, b) => b.total - a.total)
       .slice(0, 8);
 
-    const entityMap = entityByUser.get(user.id) ?? new Map();
+    const entityMap = entityByUser.get(user.id) ?? new Map<string, number>();
     user.activity.topEntities = Array.from(entityMap.entries())
       .map(([entityType, total]) => ({ entityType, total }))
       .sort((a, b) => b.total - a.total)
       .slice(0, 8);
 
-    const moduleMap = moduleByUser.get(user.id) ?? new Map();
+    const moduleMap = moduleByUser.get(user.id) ?? new Map<string, ModuleAggregate>();
     user.moduleContributions = Array.from(moduleMap.values())
       .map((entry) => {
         const page = PAGE_META[entry.pageKey] ?? { key: entry.pageKey, label: entry.pageKey, route: '/' };
