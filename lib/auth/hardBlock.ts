@@ -5,8 +5,8 @@ const TRUE_VALUES = new Set(['1', 'true', 'yes', 'on']);
 
 export function isAuthHardBlocked(): boolean {
   const raw = process.env.AUTH_HARD_BLOCK?.trim().toLowerCase();
-  // Default to blocked unless explicitly disabled.
-  if (!raw) return true;
+  // Default to unblocked; enable by setting AUTH_HARD_BLOCK=true.
+  if (!raw) return false;
   return TRUE_VALUES.has(raw);
 }
 

@@ -17,6 +17,8 @@ interface NavItem {
   subItems?: NavItem[];
 }
 
+const MASTER_ADMIN_EMAIL = 'malakye@easyflow.au';
+
 export default function SidebarNav() {
   const pathname = usePathname();
   const { config } = useOrgConfig();
@@ -24,6 +26,7 @@ export default function SidebarNav() {
   const isMobile = useIsMobile();
   const surface = getSurface(session?.actor ?? null, { isMobile });
   const isCrewSurface = surface === 'crew';
+  const isMasterAdmin = session?.user?.email?.trim().toLowerCase() === MASTER_ADMIN_EMAIL;
   const [orgBrand, setOrgBrand] = useState<{ companyName: string | null; companyLogoPath: string | null } | null>(null);
 
   const adminNavItems: NavItem[] = [
@@ -54,7 +57,11 @@ export default function SidebarNav() {
     { href: '/profile', label: 'Profile' },
   ];
 
-  const navItems = isCrewSurface ? crewNavItems : adminNavItems;
+  const navItems = isCrewSurface
+    ? crewNavItems
+    : isMasterAdmin
+      ? [...adminNavItems, { href: '/master-admin', label: 'Master Admin' }]
+      : adminNavItems;
 
   useEffect(() => {
     if (!config) return;
