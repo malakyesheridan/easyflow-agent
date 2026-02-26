@@ -10,14 +10,9 @@ import { buildSessionCookie, createSession } from '@/lib/auth/session';
 import { logAuditEvent } from '@/lib/audit/logAuditEvent';
 import { buildAuditMetadata } from '@/lib/audit/metadata';
 import { rateLimit, getClientId } from '@/lib/security/rateLimit';
-import { getAuthHardBlockMessage, isAuthHardBlocked } from '@/lib/auth/hardBlock';
 
 export async function POST(req: Request): Promise<Response> {
   try {
-    if (isAuthHardBlocked()) {
-      return jsonResult(err('FORBIDDEN', getAuthHardBlockMessage()));
-    }
-
     const body = await req.json();
     const email = String(body?.email ?? '').trim().toLowerCase();
     const password = String(body?.password ?? '');

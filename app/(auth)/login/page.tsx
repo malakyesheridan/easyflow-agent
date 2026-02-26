@@ -10,7 +10,6 @@ import Button from '@/components/ui/Button';
 export default function LoginPage() {
   const router = useRouter();
   const [nextPath, setNextPath] = useState('/dashboard');
-  const [hardBlockMessage, setHardBlockMessage] = useState<string | null>(null);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -21,14 +20,10 @@ export default function LoginPage() {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     setNextPath(params.get('next') || '/dashboard');
-    if (params.get('blocked') === '1') {
-      setHardBlockMessage('Platform access is temporarily disabled. Please contact your administrator.');
-    }
   }, []);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (hardBlockMessage) return;
     setError(null);
     setIsSubmitting(true);
 
@@ -69,9 +64,9 @@ export default function LoginPage() {
       }
     >
       <form onSubmit={handleSubmit} className="space-y-4">
-        {(hardBlockMessage || error) && (
+        {error && (
           <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {hardBlockMessage || error}
+            {error}
           </div>
         )}
         <Input
@@ -95,8 +90,8 @@ export default function LoginPage() {
             Forgot password?
           </Link>
         </div>
-        <Button type="submit" disabled={isSubmitting || Boolean(hardBlockMessage)} className="w-full">
-          {hardBlockMessage ? 'Sign in disabled' : isSubmitting ? 'Signing in...' : 'Sign in'}
+        <Button type="submit" disabled={isSubmitting} className="w-full">
+          {isSubmitting ? 'Signing in...' : 'Sign in'}
         </Button>
       </form>
     </AuthShell>

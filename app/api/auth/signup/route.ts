@@ -15,7 +15,6 @@ import { buildSessionCookie, createSession } from '@/lib/auth/session';
 import { seedCommDefaults } from '@/lib/communications/seed';
 import { withCommOrgScope } from '@/lib/communications/scope';
 import { rateLimit, getClientId } from '@/lib/security/rateLimit';
-import { getAuthHardBlockMessage, isAuthHardBlocked } from '@/lib/auth/hardBlock';
 
 const signupSchema = z.object({
   name: z.string().trim().min(1, 'Name is required'),
@@ -78,10 +77,6 @@ function fail(code: string, message: string): never {
 export async function POST(req: Request): Promise<Response> {
   const isDev = process.env.NODE_ENV !== 'production';
   try {
-    if (isAuthHardBlocked()) {
-      return jsonResult(err('FORBIDDEN', getAuthHardBlockMessage()));
-    }
-
     const body = await req.json();
     const parsed = signupSchema.safeParse(body);
     if (!parsed.success) {
